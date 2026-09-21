@@ -78,6 +78,60 @@ async function onPickWorkout(templateId: Id<'templates'> | null) {
   showPicker.value = false
   await navigateTo(`/workout/${id}`)
 }
+
+// --- Modify / delete a session from the calendar ---
+const updateWorkout = useConvexMutation(api.workouts.update)
+const removeWorkout = useConvexMutation(api.workouts.remove)
+
+const activeId = ref<Id<'workouts'> | null>(null)
+
+const showRename = ref(false)
+const renameValue = ref('')
+function openRename(w: { _id: Id<'workouts'>, name: string }) {
+  activeId.value = w._id
+  renameValue.value = w.name
+  showRename.value = true
+}
+async function saveRename() {
+  if (activeId.value) await updateWorkout.mutate({ id: activeId.value, name: renameValue.value })
+  showRename.value = false
+}
+
+const showMove = ref(false)
+const moveValue = ref('')
+function openMove(w: { _id: Id<'workouts'>, date: string }) {
+  activeId.value = w._id
+  moveValue.value = w.date
+  showMove.value = true
+}
+async function saveMove() {
+  if (activeId.value && moveValue.value) {
+    await updateWorkout.mutate({ id: activeId.value, date: moveValue.value })
+    selectedDate.value = moveValue.value
+  }
+  showMove.value = false
+}
+
+const showDelete = ref(false)
+const deleteName = ref('')
+function openDelete(w: { _id: Id<'workouts'>, name: string }) {
+  activeId.value = w._id
+  deleteName.value = w.name
+  showDelete.value = true
+}
+async function confirmDelete() {
+  if (activeId.value) await removeWorkout.mutate({ id: activeId.value })
+  showDelete.value = false
+}
+
+function menuItems(w: { _id: Id<'workouts'>, name: string, date: string }) {
+  return [[
+    { label: 'Open', icon: 'i-lucide-square-arrow-out-up-right', onSelect: () => navigateTo(`/workout/${w._id}`) },
+    { label: 'Rename', icon: 'i-lucide-pencil', onSelect: () => openRename(w) },
+    { label: 'Move to date', icon: 'i-lucide-calendar', onSelect: () => openMove(w) },
+    { label: 'Delete', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: () => openDelete(w) }
+  ]]
+}
 </script>
 
 <template>
@@ -172,17 +226,16 @@ async function onPickWorkout(templateId: Id<'templates'> | null) {
         No workouts this day. Tap "Add" to schedule one.
       </p>
 
-      <NuxtLink
+      <UCard
         v-for="w in selectedWorkouts"
         :key="w._id"
-        :to="`/workout/${w._id}`"
-        class="block"
+        :ui="{ body: 'p-2 sm:p-2' }"
       >
-        <UCard
-          :ui="{ body: 'p-3 sm:p-3' }"
-          class="hover:bg-elevated/50 transition-colors"
-        >
-          <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-1">
+          <NuxtLink
+            :to="`/workout/${w._id}`"
+            class="flex items-center gap-2 flex-1 min-w-0 p-1 rounded-md hover:bg-elevated/50 transition-colors"
+          >
             <span class="font-medium truncate">{{ w.name }}</span>
             <UBadge
               :color="statusColor[w.status]"
@@ -191,9 +244,17 @@ async function onPickWorkout(templateId: Id<'templates'> | null) {
             >
               {{ w.status.replace('_', ' ') }}
             </UBadge>
-          </div>
-        </UCard>
-      </NuxtLink>
+          </NuxtLink>
+          <UDropdownMenu :items="menuItems(w)">
+            <UButton
+              icon="i-lucide-ellipsis-vertical"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+            />
+          </UDropdownMenu>
+        </div>
+      </UCard>
     </div>
 
     <!-- Workout picker (add to day / start now) -->
@@ -202,5 +263,90 @@ async function onPickWorkout(templateId: Id<'templates'> | null) {
       :title="pickerTitle"
       @select="onPickWorkout"
     />
+
+    <!-- Rename session -->
+    <UModal
+      v-model:open="showRename"
+      title="Rename workout"
+    >
+      <template #body>
+        <div class="space-y-4">
+          <UInput
+            v-model="renameValue"
+            autofocus
+            class="w-full"
+            @keyup.enter="saveRename"
+          />
+          <div class="flex justify-end gap-2">
+            <UButton
+              label="Cancel"
+              color="neutral"
+              variant="ghost"
+              @click="showRename = false"
+            />
+            <UButton
+              label="Save"
+              @click="saveRename"
+            />
+          </div>
+        </div>
+      </template>
+    </UModal>
+
+    <!-- Move session to another date -->
+    <UModal
+      v-model:open="showMove"
+      title="Move to date"
+    >
+      <template #body>
+        <div class="space-y-4">
+          <UInput
+            v-model="moveValue"
+            type="date"
+            class="w-full"
+          />
+          <div class="flex justify-end gap-2">
+            <UButton
+              label="Cancel"
+              color="neutral"
+              variant="ghost"
+              @click="showMove = false"
+            />
+            <UButton
+              label="Move"
+              :disabled="!moveValue"
+              @click="saveMove"
+            />
+          </div>
+        </div>
+      </template>
+    </UModal>
+
+    <!-- Delete session -->
+    <UModal
+      v-model:open="showDelete"
+      title="Delete workout?"
+    >
+      <template #body>
+        <div class="space-y-4">
+          <p class="text-sm text-muted">
+            Delete "{{ deleteName }}" and all its logged sets? This can't be undone.
+          </p>
+          <div class="flex justify-end gap-2">
+            <UButton
+              label="Cancel"
+              color="neutral"
+              variant="ghost"
+              @click="showDelete = false"
+            />
+            <UButton
+              label="Delete"
+              color="error"
+              @click="confirmDelete"
+            />
+          </div>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>
