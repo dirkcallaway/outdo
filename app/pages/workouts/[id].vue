@@ -109,6 +109,22 @@ async function startNow() {
       </UDropdownMenu>
     </div>
 
+    <!-- Start now -->
+    <div>
+      <UButton
+        label="Start now"
+        icon="i-lucide-play"
+        block
+        size="lg"
+        :loading="starting"
+        :disabled="plan.exercises.length === 0"
+        @click="startNow"
+      />
+      <p class="text-xs text-muted text-center mt-2">
+        Or add this workout to a day from the calendar.
+      </p>
+    </div>
+
     <!-- Exercises with targets -->
     <div class="space-y-2">
       <div
@@ -181,22 +197,6 @@ async function startNow() {
         block
         @click="showPicker = true"
       />
-    </div>
-
-    <!-- Start now -->
-    <div class="pt-2">
-      <UButton
-        label="Start now"
-        icon="i-lucide-play"
-        block
-        size="lg"
-        :loading="starting"
-        :disabled="plan.exercises.length === 0"
-        @click="startNow"
-      />
-      <p class="text-xs text-muted text-center mt-2">
-        Or add this workout to a day from the calendar.
-      </p>
     </div>
 
     <ExercisePicker

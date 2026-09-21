@@ -45,12 +45,21 @@ const idbKey = `workout-sets-${workoutId.value}`
 const { data: store } = useIDBKeyval<Record<string, LocalSet[]>>(idbKey, {})
 
 const unit = ref<'kg' | 'lb'>('kg')
+const unitInit = ref(false)
 
 // Seed local sets from the server the first time we see each entry.
 watch(
   () => workout.value,
   (w) => {
     if (!w || !store.value) return
+    // Adopt the workout's existing unit (from any logged set) once.
+    if (!unitInit.value) {
+      const anySet = w.entries.flatMap(e => e.sets)[0]
+      if (anySet) {
+        unit.value = anySet.unit
+        unitInit.value = true
+      }
+    }
     const next = { ...store.value }
     let changed = false
     for (const entry of w.entries) {
@@ -138,6 +147,22 @@ function removeSet(entryId: string, index: number) {
   list.splice(index, 1)
   list.forEach((s, i) => (s.setNumber = i + 1))
   if (store.value) commit({ ...store.value, [entryId]: list })
+}
+
+// Set the unit for the whole workout: relabel every set (keeps the numbers)
+// and re-sync already-logged sets so completed workouts update too.
+function changeUnit(u: 'kg' | 'lb') {
+  unit.value = u
+  unitInit.value = true
+  if (!store.value) return
+  const next: Record<string, LocalSet[]> = {}
+  for (const [entryId, sets] of Object.entries(store.value)) {
+    next[entryId] = sets.map(s => ({ ...s, unit: u }))
+    for (const s of next[entryId]) {
+      if (s.completed) syncSet(entryId, s)
+    }
+  }
+  commit(next)
 }
 
 // --- Collapse finished exercises to cut down scrolling ---
@@ -242,13 +267,13 @@ const menuItems = computed(() => [[
             label="kg"
             :color="unit === 'kg' ? 'primary' : 'neutral'"
             :variant="unit === 'kg' ? 'solid' : 'soft'"
-            @click="unit = 'kg'"
+            @click="changeUnit('kg')"
           />
           <UButton
             label="lb"
             :color="unit === 'lb' ? 'primary' : 'neutral'"
             :variant="unit === 'lb' ? 'solid' : 'soft'"
-            @click="unit = 'lb'"
+            @click="changeUnit('lb')"
           />
         </UFieldGroup>
         <UDropdownMenu :items="menuItems">
