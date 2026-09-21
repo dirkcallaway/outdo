@@ -1,81 +1,106 @@
 <script setup lang="ts">
-// A compact stopwatch + rest countdown for use during a workout.
-const elapsed = ref(0) // seconds, counts up
-const running = ref(false)
-const restTarget = ref(0) // when > 0, we're counting down a rest
+// Rest timer for the sticky workout bar: quick rest presets, a prominent
+// countdown while resting, and an encouraging nudge when the rest is up.
+const elapsed = ref(0) // seconds counted since the rest started
+const restTarget = ref(0) // > 0 while a rest countdown is active
+const finishedMsg = ref<string | null>(null)
 
-const { pause, resume, isActive } = useIntervalFn(() => {
+const PHRASES = [
+  'Time\'s up — let\'s go! 💪',
+  'Back to it!',
+  'Rest\'s over. You\'ve got this.',
+  'Go crush the next set 🔥',
+  'Up you get — one more.',
+  'Let\'s move!'
+]
+
+const { pause, resume } = useIntervalFn(() => {
   elapsed.value++
-  if (restTarget.value > 0 && elapsed.value >= restTarget.value) {
-    finishRest()
-  }
+  if (restTarget.value > 0 && elapsed.value >= restTarget.value) finishRest()
 }, 1000, { immediate: false })
 
-function start() {
-  running.value = true
-  resume()
-}
-function stop() {
-  running.value = false
-  pause()
-}
-function reset() {
-  stop()
-  elapsed.value = 0
-  restTarget.value = 0
-}
-function toggle() {
-  if (isActive.value) stop()
-  else start()
-}
-
 function startRest(seconds: number) {
+  finishedMsg.value = null
   elapsed.value = 0
   restTarget.value = seconds
-  start()
+  resume()
+}
+
+function stopRest() {
+  pause()
+  restTarget.value = 0
+  elapsed.value = 0
 }
 
 function finishRest() {
-  stop()
+  pause()
   restTarget.value = 0
-  // Best-effort haptic + notification cue.
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate?.(400)
+  finishedMsg.value = PHRASES[Math.floor(Math.random() * PHRASES.length)] ?? 'Let\'s go!'
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate?.([300, 120, 300])
+  setTimeout(() => (finishedMsg.value = null), 5000)
 }
 
+const remaining = computed(() => Math.max(restTarget.value - elapsed.value, 0))
 const label = computed(() => {
-  const total = restTarget.value > 0 ? Math.max(restTarget.value - elapsed.value, 0) : elapsed.value
-  const m = Math.floor(total / 60)
-  const s = total % 60
+  const m = Math.floor(remaining.value / 60)
+  const s = remaining.value % 60
   return `${m}:${String(s).padStart(2, '0')}`
 })
-
 const isRest = computed(() => restTarget.value > 0)
 
 onUnmounted(pause)
 </script>
 
 <template>
-  <div class="flex items-center gap-2 rounded-xl border border-default bg-elevated/60 p-2">
-    <div class="flex items-center gap-2 flex-1">
-      <UButton
-        :icon="isActive ? 'i-lucide-pause' : 'i-lucide-play'"
-        :color="isActive ? 'primary' : 'neutral'"
-        variant="soft"
-        size="sm"
-        @click="toggle"
+  <div class="flex items-center gap-2">
+    <!-- Finished nudge -->
+    <div
+      v-if="finishedMsg"
+      class="flex-1 flex items-center gap-2 text-success font-semibold"
+    >
+      <UIcon
+        name="i-lucide-party-popper"
+        class="size-5 shrink-0"
       />
-      <div
-        class="tabular-nums font-semibold text-lg"
-        :class="isRest ? 'text-primary' : ''"
-      >
+      <span class="truncate">{{ finishedMsg }}</span>
+    </div>
+
+    <!-- Active rest countdown -->
+    <template v-else-if="isRest">
+      <UIcon
+        name="i-lucide-timer"
+        class="text-primary size-5 shrink-0"
+      />
+      <div class="tabular-nums font-bold text-2xl text-primary leading-none">
         {{ label }}
       </div>
-      <span
-        v-if="isRest"
-        class="text-xs text-muted"
-      >rest</span>
-    </div>
-    <div class="flex items-center gap-1">
+      <span class="text-xs text-muted">rest</span>
+      <div class="flex-1" />
+      <UButton
+        icon="i-lucide-plus"
+        label="30s"
+        size="xs"
+        color="neutral"
+        variant="soft"
+        @click="restTarget += 30"
+      />
+      <UButton
+        label="Skip"
+        size="xs"
+        color="neutral"
+        variant="soft"
+        @click="stopRest"
+      />
+    </template>
+
+    <!-- Idle: rest presets -->
+    <template v-else>
+      <UIcon
+        name="i-lucide-timer"
+        class="text-muted size-5 shrink-0"
+      />
+      <span class="text-sm text-muted">Rest</span>
+      <div class="flex-1" />
       <UButton
         label="60s"
         size="xs"
@@ -97,13 +122,6 @@ onUnmounted(pause)
         variant="soft"
         @click="startRest(120)"
       />
-      <UButton
-        icon="i-lucide-rotate-ccw"
-        size="xs"
-        color="neutral"
-        variant="ghost"
-        @click="reset"
-      />
-    </div>
+    </template>
   </div>
 </template>

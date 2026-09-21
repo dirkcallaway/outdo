@@ -140,6 +140,29 @@ function removeSet(entryId: string, index: number) {
   if (store.value) commit({ ...store.value, [entryId]: list })
 }
 
+// --- Collapse finished exercises to cut down scrolling ---
+const manualExpand = ref<Record<string, boolean>>({})
+
+function entryDone(entryId: string): boolean {
+  const sets = setsFor(entryId)
+  return sets.length > 0 && sets.every(s => s.completed)
+}
+function isCollapsed(entryId: string): boolean {
+  return entryDone(entryId) && !manualExpand.value[entryId]
+}
+function expand(entryId: string) {
+  manualExpand.value = { ...manualExpand.value, [entryId]: true }
+}
+function collapse(entryId: string) {
+  manualExpand.value = { ...manualExpand.value, [entryId]: false }
+}
+function doneSummary(entryId: string): string {
+  const sets = setsFor(entryId)
+  const top = Math.max(0, ...sets.map(s => Number(s.weight) || 0))
+  const u = sets[0]?.unit ?? 'kg'
+  return top > 0 ? `${sets.length} sets · ${top}${u}` : `${sets.length} sets`
+}
+
 // --- Exercise picker ---
 const showPicker = ref(false)
 async function onPickExercise(id: Id<'exercises'>) {
@@ -163,7 +186,6 @@ async function start() {
   await setStatus.mutate({ id: workoutId.value, status: 'in_progress' })
 }
 async function finish() {
-  // Flush any locally-buffered sets before completing.
   await setStatus.mutate({ id: workoutId.value, status: 'completed' })
   await navigateTo('/')
 }
@@ -214,51 +236,91 @@ const menuItems = computed(() => [[
           {{ formatDisplayDate(workout.date) }}
         </p>
       </div>
-      <UDropdownMenu :items="menuItems">
+      <div class="flex items-center gap-1 shrink-0">
+        <UFieldGroup size="xs">
+          <UButton
+            label="kg"
+            :color="unit === 'kg' ? 'primary' : 'neutral'"
+            :variant="unit === 'kg' ? 'solid' : 'soft'"
+            @click="unit = 'kg'"
+          />
+          <UButton
+            label="lb"
+            :color="unit === 'lb' ? 'primary' : 'neutral'"
+            :variant="unit === 'lb' ? 'solid' : 'soft'"
+            @click="unit = 'lb'"
+          />
+        </UFieldGroup>
+        <UDropdownMenu :items="menuItems">
+          <UButton
+            icon="i-lucide-ellipsis-vertical"
+            color="neutral"
+            variant="ghost"
+          />
+        </UDropdownMenu>
+      </div>
+    </div>
+
+    <!-- Sticky control bar: start / rest timer + finish -->
+    <div
+      class="sticky top-14 z-10 -mx-4 px-4 py-2 bg-default/95 backdrop-blur border-b border-default"
+    >
+      <UButton
+        v-if="!started && !completed"
+        label="Start workout"
+        icon="i-lucide-play"
+        block
+        size="lg"
+        @click="start"
+      />
+      <div
+        v-else-if="started"
+        class="flex items-center gap-2"
+      >
+        <RestTimer class="flex-1 min-w-0" />
         <UButton
-          icon="i-lucide-ellipsis-vertical"
+          label="Finish"
+          icon="i-lucide-flag"
+          color="success"
+          size="sm"
+          class="shrink-0"
+          @click="finish"
+        />
+      </div>
+      <UBadge
+        v-else
+        color="success"
+        variant="soft"
+        class="w-full justify-center py-1.5"
+      >
+        Completed
+      </UBadge>
+
+      <!-- offline / sync indicators -->
+      <div
+        v-if="!online || pendingCount > 0"
+        class="flex items-center gap-2 mt-2"
+      >
+        <UBadge
+          v-if="!online"
+          color="warning"
+          variant="soft"
+          size="sm"
+          icon="i-lucide-wifi-off"
+        >
+          Offline
+        </UBadge>
+        <UBadge
+          v-if="pendingCount > 0"
           color="neutral"
-          variant="ghost"
-        />
-      </UDropdownMenu>
+          variant="soft"
+          size="sm"
+          icon="i-lucide-cloud-upload"
+        >
+          {{ pendingCount }} to sync
+        </UBadge>
+      </div>
     </div>
-
-    <!-- Offline / status bar -->
-    <div class="flex items-center gap-2">
-      <UBadge
-        v-if="!online"
-        color="warning"
-        variant="soft"
-        icon="i-lucide-wifi-off"
-      >
-        Offline
-      </UBadge>
-      <UBadge
-        v-if="pendingCount > 0"
-        color="neutral"
-        variant="soft"
-        icon="i-lucide-cloud-upload"
-      >
-        {{ pendingCount }} to sync
-      </UBadge>
-      <div class="flex-1" />
-      <UFieldGroup size="xs">
-        <UButton
-          label="kg"
-          :color="unit === 'kg' ? 'primary' : 'neutral'"
-          :variant="unit === 'kg' ? 'solid' : 'soft'"
-          @click="unit = 'kg'"
-        />
-        <UButton
-          label="lb"
-          :color="unit === 'lb' ? 'primary' : 'neutral'"
-          :variant="unit === 'lb' ? 'solid' : 'soft'"
-          @click="unit = 'lb'"
-        />
-      </UFieldGroup>
-    </div>
-
-    <RestTimer />
 
     <!-- Exercises -->
     <div class="space-y-3">
@@ -267,94 +329,124 @@ const menuItems = computed(() => [[
         :key="entry._id"
         :ui="{ body: 'p-3 sm:p-4' }"
       >
-        <div class="flex items-center justify-between mb-2 gap-1">
-          <h3 class="font-semibold truncate flex-1">
-            {{ entry.exerciseName }}
-          </h3>
-          <UButton
-            icon="i-lucide-chevron-up"
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            :disabled="ei === 0"
-            @click="moveEntry(ei, -1)"
+        <!-- Collapsed summary (finished exercise) -->
+        <button
+          v-if="isCollapsed(entry._id)"
+          type="button"
+          class="w-full flex items-center gap-2 text-left"
+          @click="expand(entry._id)"
+        >
+          <UIcon
+            name="i-lucide-check-circle-2"
+            class="text-success size-5 shrink-0"
           />
-          <UButton
-            icon="i-lucide-chevron-down"
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            :disabled="ei === workout.entries.length - 1"
-            @click="moveEntry(ei, 1)"
+          <span class="font-semibold truncate flex-1">{{ entry.exerciseName }}</span>
+          <span class="text-xs text-muted whitespace-nowrap">{{ doneSummary(entry._id) }}</span>
+          <UIcon
+            name="i-lucide-chevron-down"
+            class="text-muted size-4 shrink-0"
           />
-          <UButton
-            icon="i-lucide-x"
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            @click="removeExercise(entry._id)"
-          />
-        </div>
+        </button>
 
-        <!-- Set rows -->
-        <div class="space-y-1.5">
-          <div class="grid grid-cols-[1.5rem_1fr_1fr_2.5rem_2rem] gap-2 items-center text-xs text-muted px-1">
-            <span>#</span>
-            <span>Weight</span>
-            <span>Reps</span>
-            <span />
-            <span />
-          </div>
-          <div
-            v-for="(s, i) in setsFor(entry._id)"
-            :key="i"
-            class="grid grid-cols-[1.5rem_1fr_1fr_2.5rem_2rem] gap-2 items-center"
-            :class="s.completed ? 'opacity-70' : ''"
-          >
-            <span class="text-sm text-muted text-center">{{ s.setNumber }}</span>
-            <UInput
-              v-model.number="s.weight"
-              type="number"
-              inputmode="decimal"
-              size="lg"
-              :ui="{ base: 'text-center' }"
-              @change="onEdit(entry._id, s)"
-            />
-            <UInput
-              v-model.number="s.reps"
-              type="number"
-              inputmode="numeric"
-              size="lg"
-              :ui="{ base: 'text-center' }"
-              @change="onEdit(entry._id, s)"
-            />
+        <!-- Expanded -->
+        <template v-else>
+          <div class="flex items-center justify-between mb-2 gap-1">
+            <h3 class="font-semibold truncate flex-1">
+              {{ entry.exerciseName }}
+            </h3>
             <UButton
-              :icon="s.completed ? 'i-lucide-check-circle-2' : 'i-lucide-circle'"
-              :color="s.completed ? 'success' : 'neutral'"
-              variant="ghost"
-              size="lg"
-              @click="toggleDone(entry._id, s)"
-            />
-            <UButton
-              icon="i-lucide-minus"
+              v-if="entryDone(entry._id)"
+              icon="i-lucide-chevrons-down-up"
+              size="xs"
               color="neutral"
               variant="ghost"
+              @click="collapse(entry._id)"
+            />
+            <UButton
+              icon="i-lucide-chevron-up"
               size="xs"
-              @click="removeSet(entry._id, i)"
+              color="neutral"
+              variant="ghost"
+              :disabled="ei === 0"
+              @click="moveEntry(ei, -1)"
+            />
+            <UButton
+              icon="i-lucide-chevron-down"
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              :disabled="ei === workout.entries.length - 1"
+              @click="moveEntry(ei, 1)"
+            />
+            <UButton
+              icon="i-lucide-x"
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              @click="removeExercise(entry._id)"
             />
           </div>
-        </div>
 
-        <UButton
-          label="Add set"
-          icon="i-lucide-plus"
-          color="neutral"
-          variant="soft"
-          size="sm"
-          block
-          class="mt-2"
-          @click="addSet(entry._id)"
-        />
+          <!-- Set rows -->
+          <div class="space-y-1.5">
+            <div class="grid grid-cols-[1.5rem_1fr_1fr_2.5rem_2rem] gap-2 items-center text-xs text-muted px-1">
+              <span>#</span>
+              <span>Weight</span>
+              <span>Reps</span>
+              <span />
+              <span />
+            </div>
+            <div
+              v-for="(s, i) in setsFor(entry._id)"
+              :key="i"
+              class="grid grid-cols-[1.5rem_1fr_1fr_2.5rem_2rem] gap-2 items-center"
+              :class="s.completed ? 'opacity-70' : ''"
+            >
+              <span class="text-sm text-muted text-center">{{ s.setNumber }}</span>
+              <UInput
+                v-model.number="s.weight"
+                type="number"
+                inputmode="decimal"
+                size="lg"
+                :ui="{ base: 'text-center' }"
+                @change="onEdit(entry._id, s)"
+              />
+              <UInput
+                v-model.number="s.reps"
+                type="number"
+                inputmode="numeric"
+                size="lg"
+                :ui="{ base: 'text-center' }"
+                @change="onEdit(entry._id, s)"
+              />
+              <UButton
+                :icon="s.completed ? 'i-lucide-check-circle-2' : 'i-lucide-circle'"
+                :color="s.completed ? 'success' : 'neutral'"
+                variant="ghost"
+                size="lg"
+                @click="toggleDone(entry._id, s)"
+              />
+              <UButton
+                icon="i-lucide-minus"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                @click="removeSet(entry._id, i)"
+              />
+            </div>
+          </div>
+
+          <UButton
+            label="Add set"
+            icon="i-lucide-plus"
+            color="neutral"
+            variant="soft"
+            size="sm"
+            block
+            class="mt-2"
+            @click="addSet(entry._id)"
+          />
+        </template>
       </UCard>
 
       <UButton
@@ -364,36 +456,6 @@ const menuItems = computed(() => [[
         block
         @click="showPicker = true"
       />
-    </div>
-
-    <!-- Primary action -->
-    <div class="pt-2">
-      <UButton
-        v-if="!started && !completed"
-        label="Start workout"
-        icon="i-lucide-play"
-        block
-        size="lg"
-        @click="start"
-      />
-      <UButton
-        v-else-if="started"
-        label="Finish workout"
-        icon="i-lucide-flag"
-        color="success"
-        block
-        size="lg"
-        @click="finish"
-      />
-      <UBadge
-        v-else
-        color="success"
-        variant="soft"
-        size="lg"
-        class="w-full justify-center py-2"
-      >
-        Completed
-      </UBadge>
     </div>
 
     <ExercisePicker
