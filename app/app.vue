@@ -59,7 +59,7 @@ function isActive(to: string) {
             name="i-lucide-flame"
             class="text-primary size-5"
           />
-          <span>Workouts</span>
+          <span>OutDo</span>
         </NuxtLink>
         <div class="flex items-center gap-1">
           <UColorModeButton />

@@ -235,6 +235,26 @@ const menuItems = computed(() => [[
   { label: 'Rename', icon: 'i-lucide-pencil', onSelect: openRename },
   { label: 'Delete', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: deleteWorkout }
 ]])
+
+// Per-exercise actions, tucked into a single "..." menu to keep each row clean.
+function entryMenu(entry: { _id: Id<'workoutEntries'> }, index: number) {
+  const move = [
+    { label: 'Move up', icon: 'i-lucide-arrow-up', disabled: index === 0, onSelect: () => moveEntry(index, -1) },
+    {
+      label: 'Move down',
+      icon: 'i-lucide-arrow-down',
+      disabled: index === (workout.value?.entries.length ?? 0) - 1,
+      onSelect: () => moveEntry(index, 1)
+    }
+  ]
+  if (entryDone(entry._id)) {
+    move.unshift({ label: 'Collapse', icon: 'i-lucide-chevrons-down-up', disabled: false, onSelect: () => collapse(entry._id) })
+  }
+  return [
+    move,
+    [{ label: 'Remove exercise', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: () => removeExercise(entry._id) }]
+  ]
+}
 </script>
 
 <template>
@@ -379,37 +399,14 @@ const menuItems = computed(() => [[
             <h3 class="font-semibold truncate flex-1">
               {{ entry.exerciseName }}
             </h3>
-            <UButton
-              v-if="entryDone(entry._id)"
-              icon="i-lucide-chevrons-down-up"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              @click="collapse(entry._id)"
-            />
-            <UButton
-              icon="i-lucide-chevron-up"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              :disabled="ei === 0"
-              @click="moveEntry(ei, -1)"
-            />
-            <UButton
-              icon="i-lucide-chevron-down"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              :disabled="ei === workout.entries.length - 1"
-              @click="moveEntry(ei, 1)"
-            />
-            <UButton
-              icon="i-lucide-x"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              @click="removeExercise(entry._id)"
-            />
+            <UDropdownMenu :items="entryMenu(entry, ei)">
+              <UButton
+                icon="i-lucide-ellipsis-vertical"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+              />
+            </UDropdownMenu>
           </div>
 
           <!-- Set rows -->
