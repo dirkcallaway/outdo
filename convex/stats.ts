@@ -8,6 +8,41 @@ function estimate1RM(weight: number, reps: number): number {
   return Math.round(weight * (1 + reps / 30))
 }
 
+// Distinct exercises the user has actually logged sets for, most-recent first.
+// Powers the stats picker so it lists only exercises you've done.
+export const loggedExercises = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getUserId(ctx)
+    if (!userId) return []
+    const sets = await ctx.db
+      .query('sets')
+      .withIndex('by_user_exercise', q => q.eq('userId', userId))
+      .collect()
+
+    const byExercise = new Map<string, { setCount: number, lastLoggedAt: number }>()
+    for (const s of sets) {
+      const cur = byExercise.get(s.exerciseId) ?? { setCount: 0, lastLoggedAt: 0 }
+      cur.setCount++
+      cur.lastLoggedAt = Math.max(cur.lastLoggedAt, s.loggedAt)
+      byExercise.set(s.exerciseId, cur)
+    }
+
+    const rows = await Promise.all(
+      [...byExercise.entries()].map(async ([exerciseId, stat]) => {
+        const ex = await ctx.db.get(exerciseId as Doc<'sets'>['exerciseId'])
+        return {
+          exerciseId,
+          name: ex?.name ?? 'Exercise',
+          setCount: stat.setCount,
+          lastLoggedAt: stat.lastLoggedAt
+        }
+      })
+    )
+    return rows.sort((a, b) => b.lastLoggedAt - a.lastLoggedAt)
+  }
+})
+
 // Per-session history for one exercise: one point per workout, sorted by date.
 export const exerciseHistory = query({
   args: { exerciseId: v.id('exercises') },

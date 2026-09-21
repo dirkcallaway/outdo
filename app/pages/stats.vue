@@ -3,12 +3,17 @@ import { api } from '~~/convex/_generated/api'
 import type { Id } from '~~/convex/_generated/dataModel'
 
 const { data: summary } = useConvexQuery(api.stats.summary, {})
+const { data: logged } = useConvexQuery(api.stats.loggedExercises, {})
 
-const showPicker = ref(false)
 const selected = ref<{ id: Id<'exercises'>, name: string } | null>(null)
-
-function onPick(id: Id<'exercises'>, name: string) {
+function select(id: Id<'exercises'>, name: string) {
   selected.value = { id, name }
+}
+
+// Fallback: search the full library (e.g. an exercise not yet logged).
+const showPicker = ref(false)
+function onPick(id: Id<'exercises'>, name: string) {
+  select(id, name)
   showPicker.value = false
 }
 
@@ -57,26 +62,65 @@ const cards = computed(() => [
           Exercise progress
         </h2>
         <UButton
-          :label="selected ? 'Change' : 'Pick exercise'"
+          label="Search all"
           icon="i-lucide-search"
-          size="sm"
+          size="xs"
           color="neutral"
           variant="soft"
           @click="showPicker = true"
         />
       </div>
 
-      <p
-        v-if="!selected"
-        class="text-sm text-muted py-8 text-center"
-      >
-        Pick an exercise to see your progress over time.
-      </p>
-      <ExerciseProgress
-        v-else
-        :exercise-id="selected.id"
-        :name="selected.name"
-      />
+      <!-- Selected: show its progress with a way back to the list -->
+      <template v-if="selected">
+        <UButton
+          label="All exercises"
+          icon="i-lucide-chevron-left"
+          size="xs"
+          color="neutral"
+          variant="link"
+          class="-ms-2"
+          @click="selected = null"
+        />
+        <ExerciseProgress
+          :exercise-id="selected.id"
+          :name="selected.name"
+        />
+      </template>
+
+      <!-- Otherwise: pick from exercises you've actually logged -->
+      <template v-else>
+        <p
+          v-if="logged && logged.length === 0"
+          class="text-sm text-muted py-8 text-center"
+        >
+          Log some sets and your exercises will show up here.
+        </p>
+        <button
+          v-for="ex in logged"
+          :key="ex.exerciseId"
+          type="button"
+          class="w-full flex items-center gap-3 rounded-xl border border-default p-3 text-left hover:bg-elevated transition-colors"
+          @click="select(ex.exerciseId as Id<'exercises'>, ex.name)"
+        >
+          <UIcon
+            name="i-lucide-trending-up"
+            class="text-primary size-5 shrink-0"
+          />
+          <div class="min-w-0 flex-1">
+            <p class="font-medium truncate">
+              {{ ex.name }}
+            </p>
+            <p class="text-xs text-muted">
+              {{ ex.setCount }} set{{ ex.setCount === 1 ? '' : 's' }} logged
+            </p>
+          </div>
+          <UIcon
+            name="i-lucide-chevron-right"
+            class="text-dimmed size-4 shrink-0"
+          />
+        </button>
+      </template>
     </div>
 
     <ExercisePicker
