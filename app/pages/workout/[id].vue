@@ -23,9 +23,22 @@ const { logSet, pendingCount, online } = useOutbox()
 
 const addExercise = useConvexMutation(api.workouts.addExercise)
 const removeEntryM = useConvexMutation(api.workouts.removeEntry)
+const reorderEntries = useConvexMutation(api.workouts.reorderEntries)
 const setStatus = useConvexMutation(api.workouts.setStatus)
 const updateWorkout = useConvexMutation(api.workouts.update)
 const removeWorkout = useConvexMutation(api.workouts.remove)
+
+// Move an exercise up (-1) or down (+1) within the session.
+function moveEntry(index: number, dir: -1 | 1) {
+  const list = workout.value?.entries ?? []
+  const target = index + dir
+  if (target < 0 || target >= list.length) return
+  const ids = list.map(e => e._id)
+  const tmp = ids[index]!
+  ids[index] = ids[target]!
+  ids[target] = tmp
+  reorderEntries.mutate({ orderedEntryIds: ids })
+}
 
 // Local-first set state, persisted per-workout so it survives reloads / offline.
 const idbKey = `workout-sets-${workoutId.value}`
@@ -250,14 +263,30 @@ const menuItems = computed(() => [[
     <!-- Exercises -->
     <div class="space-y-3">
       <UCard
-        v-for="entry in workout.entries"
+        v-for="(entry, ei) in workout.entries"
         :key="entry._id"
         :ui="{ body: 'p-3 sm:p-4' }"
       >
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="font-semibold">
+        <div class="flex items-center justify-between mb-2 gap-1">
+          <h3 class="font-semibold truncate flex-1">
             {{ entry.exerciseName }}
           </h3>
+          <UButton
+            icon="i-lucide-chevron-up"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            :disabled="ei === 0"
+            @click="moveEntry(ei, -1)"
+          />
+          <UButton
+            icon="i-lucide-chevron-down"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            :disabled="ei === workout.entries.length - 1"
+            @click="moveEntry(ei, 1)"
+          />
           <UButton
             icon="i-lucide-x"
             size="xs"

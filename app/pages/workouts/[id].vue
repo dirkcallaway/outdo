@@ -15,6 +15,7 @@ const updateTargets = useConvexMutation(api.templates.updateTargets)
 const removeExercise = useConvexMutation(api.templates.removeExercise)
 const renamePlan = useConvexMutation(api.templates.rename)
 const removePlan = useConvexMutation(api.templates.remove)
+const reorder = useConvexMutation(api.templates.reorder)
 const createSession = useConvexMutation(api.workouts.create)
 
 // --- Add exercise ---
@@ -22,6 +23,18 @@ const showPicker = ref(false)
 async function onPick(id: Id<'exercises'>) {
   await addExercise.mutate({ templateId: planId.value, exerciseId: id })
   showPicker.value = false
+}
+
+// Move an exercise up (-1) or down (+1) and persist the new order.
+function move(index: number, dir: -1 | 1) {
+  const list = plan.value?.exercises ?? []
+  const target = index + dir
+  if (target < 0 || target >= list.length) return
+  const ids = list.map(e => e._id)
+  const tmp = ids[index]!
+  ids[index] = ids[target]!
+  ids[target] = tmp
+  reorder.mutate({ orderedEntryIds: ids })
 }
 
 function setTargets(entryId: Id<'templateEntries'>, sets: number, reps: number) {
@@ -99,10 +112,28 @@ async function startNow() {
     <!-- Exercises with targets -->
     <div class="space-y-2">
       <div
-        v-for="entry in plan.exercises"
+        v-for="(entry, i) in plan.exercises"
         :key="entry._id"
-        class="flex items-center gap-3 rounded-xl border border-default p-3"
+        class="flex items-center gap-2 rounded-xl border border-default p-3"
       >
+        <div class="flex flex-col">
+          <UButton
+            icon="i-lucide-chevron-up"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            :disabled="i === 0"
+            @click="move(i, -1)"
+          />
+          <UButton
+            icon="i-lucide-chevron-down"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            :disabled="i === plan.exercises.length - 1"
+            @click="move(i, 1)"
+          />
+        </div>
         <div class="min-w-0 flex-1">
           <p class="font-medium truncate">
             {{ entry.exerciseName }}
