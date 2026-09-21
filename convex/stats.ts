@@ -1,6 +1,6 @@
 import { query } from './_generated/server'
 import { v } from 'convex/values'
-import { requireUserId } from './helpers'
+import { getUserId } from './helpers'
 import type { Doc } from './_generated/dataModel'
 
 // Epley estimated one-rep max.
@@ -12,7 +12,8 @@ function estimate1RM(weight: number, reps: number): number {
 export const exerciseHistory = query({
   args: { exerciseId: v.id('exercises') },
   handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx)
+    const userId = await getUserId(ctx)
+    if (!userId) return []
     const sets = await ctx.db
       .query('sets')
       .withIndex('by_user_exercise', q =>
@@ -55,7 +56,8 @@ export const exerciseHistory = query({
 export const personalRecords = query({
   args: { exerciseId: v.id('exercises') },
   handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx)
+    const userId = await getUserId(ctx)
+    if (!userId) return null
     const sets = await ctx.db
       .query('sets')
       .withIndex('by_user_exercise', q =>
@@ -78,7 +80,8 @@ export const personalRecords = query({
 export const summary = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await requireUserId(ctx)
+    const userId = await getUserId(ctx)
+    if (!userId) return { totalWorkouts: 0, thisWeek: 0, streak: 0, activeDays: 0 }
     const workouts = await ctx.db
       .query('workouts')
       .withIndex('by_user_status', q => q.eq('userId', userId).eq('status', 'completed'))

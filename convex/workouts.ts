@@ -1,6 +1,6 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
-import { requireUserId } from './helpers'
+import { requireUserId, getUserId } from './helpers'
 
 const statusValidator = v.union(
   v.literal('planned'),
@@ -12,7 +12,8 @@ const statusValidator = v.union(
 export const listByMonth = query({
   args: { month: v.string() }, // "2026-09"
   handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx)
+    const userId = await getUserId(ctx)
+    if (!userId) return []
     const rows = await ctx.db
       .query('workouts')
       .withIndex('by_user_date', q =>
@@ -26,7 +27,8 @@ export const listByMonth = query({
 export const listByDate = query({
   args: { date: v.string() },
   handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx)
+    const userId = await getUserId(ctx)
+    if (!userId) return []
     return ctx.db
       .query('workouts')
       .withIndex('by_user_date', q => q.eq('userId', userId).eq('date', args.date))
@@ -38,7 +40,8 @@ export const listByDate = query({
 export const getWithEntries = query({
   args: { id: v.id('workouts') },
   handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx)
+    const userId = await getUserId(ctx)
+    if (!userId) return null
     const workout = await ctx.db.get(args.id)
     if (!workout || workout.userId !== userId) return null
 

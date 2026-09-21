@@ -2,7 +2,7 @@ import { query, mutation } from './_generated/server'
 import type { MutationCtx } from './_generated/server'
 import type { Id } from './_generated/dataModel'
 import { v } from 'convex/values'
-import { requireUserId } from './helpers'
+import { requireUserId, getUserId } from './helpers'
 
 const unitValidator = v.union(v.literal('kg'), v.literal('lb'))
 
@@ -97,7 +97,8 @@ export const remove = mutation({
 export const listByWorkout = query({
   args: { workoutId: v.id('workouts') },
   handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx)
+    const userId = await getUserId(ctx)
+    if (!userId) return []
     const rows = await ctx.db
       .query('sets')
       .withIndex('by_workout', q => q.eq('workoutId', args.workoutId))
