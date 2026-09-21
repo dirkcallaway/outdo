@@ -29,8 +29,12 @@ export default defineNuxtConfig({
   },
 
   convex: {
-    // Set NUXT_PUBLIC_CONVEX_URL in .env (printed by `npx convex dev`)
-    url: process.env.NUXT_PUBLIC_CONVEX_URL
+    // Public value (ships in the browser bundle). Local dev reads the dev URL
+    // from .env; the literal is the production deployment fallback so the build
+    // doesn't depend on Vercel's env plumbing (which was arriving empty).
+    url:
+      process.env.NUXT_PUBLIC_CONVEX_URL
+      || 'https://healthy-clownfish-243.convex.cloud'
   },
 
   eslint: {
