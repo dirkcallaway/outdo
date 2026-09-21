@@ -12,6 +12,10 @@ const title = 'Workout Tracker'
 const description = 'Build workouts, log sets and reps, and track progress over time.'
 useSeoMeta({ title, description, ogTitle: title, ogDescription: description })
 
+// Gate the UI on Clerk's own reactive auth state rather than the <SignedIn>/
+// <SignedOut> control components, which don't gate reliably here.
+const { isLoaded, isSignedIn } = useAuth()
+
 const route = useRoute()
 const tabs = [
   { label: 'Calendar', to: '/', icon: 'i-lucide-calendar-days' },
@@ -26,88 +30,90 @@ function isActive(to: string) {
 
 <template>
   <UApp>
-    <!-- Until Clerk resolves auth state, show only a loader (prevents both the
-         signed-in app and the sign-in card rendering at once during SSR). -->
-    <ClerkLoading>
-      <div class="min-h-dvh flex items-center justify-center">
-        <UIcon
-          name="i-lucide-loader-circle"
-          class="animate-spin size-6 text-muted"
-        />
-      </div>
-    </ClerkLoading>
+    <!-- Loading: until Clerk resolves, show only a spinner. -->
+    <div
+      v-if="!isLoaded"
+      class="min-h-dvh flex items-center justify-center"
+    >
+      <UIcon
+        name="i-lucide-loader-circle"
+        class="animate-spin size-6 text-muted"
+      />
+    </div>
 
-    <ClerkLoaded>
-      <SignedIn>
-        <div class="min-h-dvh flex flex-col mx-auto max-w-lg w-full">
-          <!-- Top bar -->
-          <header
-            class="sticky top-0 z-20 flex items-center justify-between gap-2 px-4 h-14 border-b border-default bg-default/80 backdrop-blur"
+    <!-- Signed in: the app. -->
+    <div
+      v-else-if="isSignedIn"
+      class="min-h-dvh flex flex-col mx-auto max-w-lg w-full"
+    >
+      <!-- Top bar -->
+      <header
+        class="sticky top-0 z-20 flex items-center justify-between gap-2 px-4 h-14 border-b border-default bg-default/80 backdrop-blur"
+      >
+        <NuxtLink
+          to="/"
+          class="flex items-center gap-2 font-semibold"
+        >
+          <UIcon
+            name="i-lucide-flame"
+            class="text-primary size-5"
+          />
+          <span>Workouts</span>
+        </NuxtLink>
+        <div class="flex items-center gap-1">
+          <UColorModeButton />
+          <UserButton />
+        </div>
+      </header>
+
+      <!-- Page -->
+      <main class="flex-1 px-4 py-4 pb-24">
+        <NuxtPage />
+      </main>
+
+      <!-- Bottom tab nav -->
+      <nav
+        class="fixed bottom-0 inset-x-0 z-20 mx-auto max-w-lg border-t border-default bg-default/95 backdrop-blur pb-[env(safe-area-inset-bottom)]"
+      >
+        <ul class="grid grid-cols-3">
+          <li
+            v-for="tab in tabs"
+            :key="tab.to"
           >
             <NuxtLink
-              to="/"
-              class="flex items-center gap-2 font-semibold"
+              :to="tab.to"
+              class="flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition-colors"
+              :class="isActive(tab.to) ? 'text-primary' : 'text-muted hover:text-default'"
             >
               <UIcon
-                name="i-lucide-flame"
-                class="text-primary size-5"
+                :name="tab.icon"
+                class="size-5"
               />
-              <span>Workouts</span>
+              {{ tab.label }}
             </NuxtLink>
-            <div class="flex items-center gap-1">
-              <UColorModeButton />
-              <UserButton />
-            </div>
-          </header>
+          </li>
+        </ul>
+      </nav>
+    </div>
 
-          <!-- Page -->
-          <main class="flex-1 px-4 py-4 pb-24">
-            <NuxtPage />
-          </main>
-
-          <!-- Bottom tab nav -->
-          <nav
-            class="fixed bottom-0 inset-x-0 z-20 mx-auto max-w-lg border-t border-default bg-default/95 backdrop-blur pb-[env(safe-area-inset-bottom)]"
-          >
-            <ul class="grid grid-cols-3">
-              <li
-                v-for="tab in tabs"
-                :key="tab.to"
-              >
-                <NuxtLink
-                  :to="tab.to"
-                  class="flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition-colors"
-                  :class="isActive(tab.to) ? 'text-primary' : 'text-muted hover:text-default'"
-                >
-                  <UIcon
-                    :name="tab.icon"
-                    class="size-5"
-                  />
-                  {{ tab.label }}
-                </NuxtLink>
-              </li>
-            </ul>
-          </nav>
-        </div>
-      </SignedIn>
-
-      <SignedOut>
-        <div class="min-h-dvh flex flex-col items-center justify-center gap-8 p-6">
-          <div class="text-center space-y-2">
-            <UIcon
-              name="i-lucide-flame"
-              class="text-primary size-10 mx-auto"
-            />
-            <h1 class="text-2xl font-bold">
-              Workout Tracker
-            </h1>
-            <p class="text-muted max-w-xs">
-              Build workouts, log your sets and reps, and watch your progress over time.
-            </p>
-          </div>
-          <SignIn />
-        </div>
-      </SignedOut>
-    </ClerkLoaded>
+    <!-- Signed out: the sign-in screen. -->
+    <div
+      v-else
+      class="min-h-dvh flex flex-col items-center justify-center gap-8 p-6"
+    >
+      <div class="text-center space-y-2">
+        <UIcon
+          name="i-lucide-flame"
+          class="text-primary size-10 mx-auto"
+        />
+        <h1 class="text-2xl font-bold">
+          Workout Tracker
+        </h1>
+        <p class="text-muted max-w-xs">
+          Build workouts, log your sets and reps, and watch your progress over time.
+        </p>
+      </div>
+      <SignIn />
+    </div>
   </UApp>
 </template>
