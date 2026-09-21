@@ -88,10 +88,22 @@ npm run lint
 
 ## Deploy (Vercel + Convex)
 
-1. `npx convex deploy` (creates/updates the production deployment).
-2. On Vercel, set env vars: `NUXT_PUBLIC_CONVEX_URL` (prod), the two Clerk keys,
-   and set `CLERK_JWT_ISSUER_DOMAIN` on the **prod** Convex deployment.
-3. Push — Vercel builds the Nuxt app.
+`vercel.json` sets the build command to
+`npx convex deploy --cmd 'npm run build' --cmd-url-env-var-name NUXT_PUBLIC_CONVEX_URL`,
+so each Vercel build deploys the Convex functions to production and injects the
+prod Convex URL into the Nuxt build.
+
+1. In the **Convex dashboard** (project → Production), set env var
+   `CLERK_JWT_ISSUER_DOMAIN` (same Clerk issuer as dev).
+2. Generate a **Production deploy key** (Convex dashboard → Settings → Deploy keys).
+3. Import the repo at [vercel.com/new](https://vercel.com/new) and add env vars:
+   - `CONVEX_DEPLOY_KEY` = the production deploy key
+   - `NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY` = `pk_...`
+   - `NUXT_CLERK_SECRET_KEY` = `sk_...`
+4. Deploy. Every push to `main` redeploys automatically.
+
+For a real launch, switch Clerk to a **production instance** (custom domain +
+your own Google OAuth credentials) and update the keys + issuer above.
 
 ## Notes
 
