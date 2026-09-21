@@ -42,19 +42,30 @@ watch(
     let changed = false
     for (const entry of w.entries) {
       if (!next[entry._id]) {
-        next[entry._id] = entry.sets.length
-          ? entry.sets.map(s => ({
-              setNumber: s.setNumber,
-              weight: s.weight,
-              reps: s.reps,
-              unit: s.unit,
-              completed: s.completed
-            }))
-          : [{ setNumber: 1, weight: 0, reps: 0, unit: unit.value, completed: false }]
+        if (entry.sets.length) {
+          next[entry._id] = entry.sets.map(s => ({
+            setNumber: s.setNumber,
+            weight: s.weight,
+            reps: s.reps,
+            unit: s.unit,
+            completed: s.completed
+          }))
+        } else {
+          // Prefill from the plan's targets: N rows at the target reps, weight blank.
+          const count = Math.max(1, entry.targetSets ?? 1)
+          const reps = entry.targetReps ?? 0
+          next[entry._id] = Array.from({ length: count }, (_, i) => ({
+            setNumber: i + 1,
+            weight: 0,
+            reps,
+            unit: unit.value,
+            completed: false
+          }))
+        }
         changed = true
       }
     }
-    if (changed) store.value = next
+    if (changed) commit(next)
   },
   { immediate: true }
 )
@@ -63,8 +74,14 @@ function setsFor(entryId: string): LocalSet[] {
   return store.value?.[entryId] ?? []
 }
 
+// IndexedDB (via useIDBKeyval) can't structured-clone Vue reactive proxies, so
+// every write goes through a plain deep-clone.
+function commit(next: Record<string, LocalSet[]>) {
+  store.value = JSON.parse(JSON.stringify(next))
+}
+
 function persist() {
-  if (store.value) store.value = { ...store.value }
+  if (store.value) commit(store.value)
 }
 
 function syncSet(entryId: string, s: LocalSet) {
@@ -100,14 +117,14 @@ function addSet(entryId: string) {
     unit: unit.value,
     completed: false
   })
-  if (store.value) store.value = { ...store.value, [entryId]: list }
+  if (store.value) commit({ ...store.value, [entryId]: list })
 }
 
 function removeSet(entryId: string, index: number) {
   const list = [...(store.value?.[entryId] ?? [])]
   list.splice(index, 1)
   list.forEach((s, i) => (s.setNumber = i + 1))
-  if (store.value) store.value = { ...store.value, [entryId]: list }
+  if (store.value) commit({ ...store.value, [entryId]: list })
 }
 
 // --- Exercise picker ---
@@ -121,7 +138,7 @@ async function removeExercise(entryId: Id<'workoutEntries'>) {
   await removeEntryM.mutate({ entryId })
   if (store.value) {
     const { [entryId]: _removed, ...rest } = store.value
-    store.value = rest
+    commit(rest)
   }
 }
 
@@ -212,7 +229,7 @@ const menuItems = computed(() => [[
         {{ pendingCount }} to sync
       </UBadge>
       <div class="flex-1" />
-      <UButtonGroup size="xs">
+      <UFieldGroup size="xs">
         <UButton
           label="kg"
           :color="unit === 'kg' ? 'primary' : 'neutral'"
@@ -225,7 +242,7 @@ const menuItems = computed(() => [[
           :variant="unit === 'lb' ? 'solid' : 'soft'"
           @click="unit = 'lb'"
         />
-      </UButtonGroup>
+      </UFieldGroup>
     </div>
 
     <RestTimer />

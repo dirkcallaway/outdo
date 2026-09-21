@@ -23,11 +23,13 @@ export default defineSchema({
       filterFields: ['source', 'category', 'createdBy']
     }),
 
-  // A workout session pinned to a calendar day.
+  // A dated workout session on the calendar. May be created from a reusable
+  // plan (templateId) or ad-hoc (templateId undefined).
   workouts: defineTable({
     userId: v.string(),
     date: v.string(), // YYYY-MM-DD (local day)
     name: v.string(),
+    templateId: v.optional(v.id('templates')),
     status: v.union(
       v.literal('planned'),
       v.literal('in_progress'),
@@ -40,14 +42,16 @@ export default defineSchema({
     .index('by_user_date', ['userId', 'date'])
     .index('by_user_status', ['userId', 'status']),
 
-  // An exercise placed inside a workout (ordered).
+  // An exercise placed inside a session (ordered). Targets are copied from the
+  // source plan so the tracker can prefill set rows.
   workoutEntries: defineTable({
     workoutId: v.id('workouts'),
     userId: v.string(),
     exerciseId: v.id('exercises'),
     exerciseName: v.string(), // denormalized for fast rendering
     order: v.number(),
-    targetSets: v.optional(v.number())
+    targetSets: v.optional(v.number()),
+    targetReps: v.optional(v.number())
   }).index('by_workout', ['workoutId']),
 
   // A single logged set. exerciseId/userId denormalized so stats queries are cheap.
@@ -68,7 +72,8 @@ export default defineSchema({
     .index('by_workout', ['workoutId'])
     .index('by_user_exercise', ['userId', 'exerciseId']),
 
-  // Reusable routines: a named ordered list of exercises with target sets.
+  // Reusable "Workouts" the user builds (UI: the Workouts tab). A named,
+  // ordered list of exercises with target sets/reps. No date, no weight.
   templates: defineTable({
     userId: v.string(),
     name: v.string(),
@@ -77,9 +82,11 @@ export default defineSchema({
 
   templateEntries: defineTable({
     templateId: v.id('templates'),
+    userId: v.string(),
     exerciseId: v.id('exercises'),
     exerciseName: v.string(),
     order: v.number(),
-    targetSets: v.optional(v.number())
+    targetSets: v.optional(v.number()),
+    targetReps: v.optional(v.number())
   }).index('by_template', ['templateId'])
 })

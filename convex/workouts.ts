@@ -65,32 +65,52 @@ export const getWithEntries = query({
   }
 })
 
+// Create a dated session. If templateId is given, copy that plan's exercises
+// and targets in. status defaults to 'planned' ("Start now" passes
+// 'in_progress').
 export const create = mutation({
   args: {
     date: v.string(),
-    name: v.string(),
-    exerciseIds: v.optional(v.array(v.id('exercises')))
+    name: v.optional(v.string()),
+    templateId: v.optional(v.id('templates')),
+    status: v.optional(statusValidator)
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx)
+
+    let name = args.name?.trim()
+    let template = null
+    if (args.templateId) {
+      template = await ctx.db.get(args.templateId)
+      if (!template || template.userId !== userId) throw new Error('Workout not found')
+      if (!name) name = template.name
+    }
+
+    const status = args.status ?? 'planned'
     const workoutId = await ctx.db.insert('workouts', {
       userId,
       date: args.date,
-      name: args.name.trim() || 'Workout',
-      status: 'planned'
+      name: name || 'Workout',
+      templateId: args.templateId,
+      status,
+      startedAt: status === 'in_progress' ? Date.now() : undefined
     })
 
-    if (args.exerciseIds?.length) {
-      let order = 0
-      for (const exerciseId of args.exerciseIds) {
-        const ex = await ctx.db.get(exerciseId)
-        if (!ex) continue
+    if (template) {
+      const planExercises = await ctx.db
+        .query('templateEntries')
+        .withIndex('by_template', q => q.eq('templateId', template!._id))
+        .collect()
+      planExercises.sort((a, b) => a.order - b.order)
+      for (const pe of planExercises) {
         await ctx.db.insert('workoutEntries', {
           workoutId,
           userId,
-          exerciseId,
-          exerciseName: ex.name,
-          order: order++
+          exerciseId: pe.exerciseId,
+          exerciseName: pe.exerciseName,
+          order: pe.order,
+          targetSets: pe.targetSets,
+          targetReps: pe.targetReps
         })
       }
     }

@@ -19,6 +19,7 @@ const { isLoaded, isSignedIn } = useAuth()
 const route = useRoute()
 const tabs = [
   { label: 'Calendar', to: '/', icon: 'i-lucide-calendar-days' },
+  { label: 'Workouts', to: '/workouts', icon: 'i-lucide-clipboard-list' },
   { label: 'Exercises', to: '/exercises', icon: 'i-lucide-dumbbell' },
   { label: 'Stats', to: '/stats', icon: 'i-lucide-trending-up' }
 ]
@@ -75,7 +76,7 @@ function isActive(to: string) {
       <nav
         class="fixed bottom-0 inset-x-0 z-20 mx-auto max-w-lg border-t border-default bg-default/95 backdrop-blur pb-[env(safe-area-inset-bottom)]"
       >
-        <ul class="grid grid-cols-3">
+        <ul class="grid grid-cols-4">
           <li
             v-for="tab in tabs"
             :key="tab.to"

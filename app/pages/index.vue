@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { api } from '~~/convex/_generated/api'
+import type { Id } from '~~/convex/_generated/dataModel'
 
 const now = new Date()
 const viewYear = ref(now.getFullYear())
@@ -49,25 +50,33 @@ const statusColor: Record<string, 'neutral' | 'primary' | 'success'> = {
   completed: 'success'
 }
 
-// --- New workout modal ---
-const showNew = ref(false)
-const newName = ref('')
-const creating = ref(false)
+// --- Add / start a session via the workout picker ---
 const createWorkout = useConvexMutation(api.workouts.create)
+const showPicker = ref(false)
+const pickerMode = ref<'add' | 'start'>('add')
 
-async function submitNew() {
-  creating.value = true
-  try {
-    const id = await createWorkout.mutate({
-      date: selectedDate.value,
-      name: newName.value || 'Workout'
-    })
-    showNew.value = false
-    newName.value = ''
-    await navigateTo(`/workout/${id}`)
-  } finally {
-    creating.value = false
-  }
+const pickerTitle = computed(() =>
+  pickerMode.value === 'start' ? 'Start now' : `Add to ${formatDisplayDate(selectedDate.value)}`
+)
+
+function openAdd() {
+  pickerMode.value = 'add'
+  showPicker.value = true
+}
+function openStartNow() {
+  pickerMode.value = 'start'
+  showPicker.value = true
+}
+
+async function onPickWorkout(templateId: Id<'templates'> | null) {
+  const starting = pickerMode.value === 'start'
+  const id = await createWorkout.mutate({
+    date: starting ? todayISO() : selectedDate.value,
+    templateId: templateId ?? undefined,
+    status: starting ? 'in_progress' : 'planned'
+  })
+  showPicker.value = false
+  await navigateTo(`/workout/${id}`)
 }
 </script>
 
@@ -100,6 +109,14 @@ async function submitNew() {
         />
       </div>
     </div>
+
+    <!-- Start now -->
+    <UButton
+      label="Start a workout now"
+      icon="i-lucide-play"
+      block
+      @click="openStartNow"
+    />
 
     <!-- Calendar grid -->
     <div>
@@ -143,8 +160,8 @@ async function submitNew() {
         <UButton
           icon="i-lucide-plus"
           size="sm"
-          label="New"
-          @click="showNew = true"
+          label="Add"
+          @click="openAdd"
         />
       </div>
 
@@ -152,7 +169,7 @@ async function submitNew() {
         v-if="selectedWorkouts.length === 0"
         class="text-sm text-muted py-6 text-center"
       >
-        No workouts this day. Tap "New" to add one.
+        No workouts this day. Tap "Add" to schedule one.
       </p>
 
       <NuxtLink
@@ -179,40 +196,11 @@ async function submitNew() {
       </NuxtLink>
     </div>
 
-    <!-- New workout modal -->
-    <UModal
-      v-model:open="showNew"
-      title="New workout"
-    >
-      <template #body>
-        <div class="space-y-4">
-          <UFormField label="Name">
-            <UInput
-              v-model="newName"
-              placeholder="e.g. Push Day"
-              autofocus
-              class="w-full"
-              @keyup.enter="submitNew"
-            />
-          </UFormField>
-          <p class="text-sm text-muted">
-            {{ formatDisplayDate(selectedDate) }}
-          </p>
-          <div class="flex justify-end gap-2">
-            <UButton
-              label="Cancel"
-              color="neutral"
-              variant="ghost"
-              @click="showNew = false"
-            />
-            <UButton
-              label="Create"
-              :loading="creating"
-              @click="submitNew"
-            />
-          </div>
-        </div>
-      </template>
-    </UModal>
+    <!-- Workout picker (add to day / start now) -->
+    <WorkoutPicker
+      v-model:open="showPicker"
+      :title="pickerTitle"
+      @select="onPickWorkout"
+    />
   </div>
 </template>

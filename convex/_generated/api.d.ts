@@ -13,6 +13,7 @@ import type * as helpers from "../helpers.js";
 import type * as seed from "../seed.js";
 import type * as sets from "../sets.js";
 import type * as stats from "../stats.js";
+import type * as templates from "../templates.js";
 import type * as workouts from "../workouts.js";
 
 import type {
@@ -27,6 +28,7 @@ declare const fullApi: ApiFromModules<{
   seed: typeof seed;
   sets: typeof sets;
   stats: typeof stats;
+  templates: typeof templates;
   workouts: typeof workouts;
 }>;
 
