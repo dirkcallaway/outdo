@@ -18,10 +18,14 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-06-30',
 
   clerk: {
-    // Bake the publishable key at build so it isn't dependent on runtime env
-    // overrides of nested public config (unreliable on serverless). The secret
-    // key stays server-only and is read from NUXT_CLERK_SECRET_KEY at runtime.
-    publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+    // The publishable key is a public value (it ships in the browser bundle), so
+    // we bake it with a literal fallback. This makes the build independent of
+    // Vercel's env plumbing for this key, which was arriving empty. Env var still
+    // takes precedence, so a Clerk prod instance key can override it later.
+    // The SECRET key stays server-only via NUXT_CLERK_SECRET_KEY at runtime.
+    publishableKey:
+      process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+      || 'pk_test_bW92aW5nLW5ld3QtNDQ1NS5jbGVyay5hY2NvdW50cy5kZXYk'
   },
 
   convex: {
