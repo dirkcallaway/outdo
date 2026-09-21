@@ -17,6 +17,13 @@ export default defineNuxtConfig({
 
   compatibilityDate: '2026-06-30',
 
+  clerk: {
+    // Bake the publishable key at build so it isn't dependent on runtime env
+    // overrides of nested public config (unreliable on serverless). The secret
+    // key stays server-only and is read from NUXT_CLERK_SECRET_KEY at runtime.
+    publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+  },
+
   convex: {
     // Set NUXT_PUBLIC_CONVEX_URL in .env (printed by `npx convex dev`)
     url: process.env.NUXT_PUBLIC_CONVEX_URL
