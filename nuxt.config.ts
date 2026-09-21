@@ -18,23 +18,16 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-06-30',
 
   clerk: {
-    // The publishable key is a public value (it ships in the browser bundle), so
-    // we bake it with a literal fallback. This makes the build independent of
-    // Vercel's env plumbing for this key, which was arriving empty. Env var still
-    // takes precedence, so a Clerk prod instance key can override it later.
-    // The SECRET key stays server-only via NUXT_CLERK_SECRET_KEY at runtime.
-    publishableKey:
-      process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-      || 'pk_test_bW92aW5nLW5ld3QtNDQ1NS5jbGVyay5hY2NvdW50cy5kZXYk'
+    // Publishable key baked from env at build. On Vercel it must be a plain
+    // (Config) env var, not Sensitive — a "public"-prefixed Sensitive var
+    // injects empty. The SECRET key stays server-only via NUXT_CLERK_SECRET_KEY.
+    publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
   },
 
   convex: {
-    // Public value (ships in the browser bundle). Local dev reads the dev URL
-    // from .env; the literal is the production deployment fallback so the build
-    // doesn't depend on Vercel's env plumbing (which was arriving empty).
-    url:
-      process.env.NUXT_PUBLIC_CONVEX_URL
-      || 'https://healthy-clownfish-243.convex.cloud'
+    // Convex deployment URL from env (dev URL in .env locally; the prod URL is
+    // a plain/Config Vercel env var). Public value that ships in the bundle.
+    url: process.env.NUXT_PUBLIC_CONVEX_URL
   },
 
   eslint: {
