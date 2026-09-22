@@ -14,6 +14,7 @@ const { data: exercises, isPending } = useConvexQuery(
 
 function pick(id: Id<'exercises'>, name: string) {
   emit('select', id, name)
+  search.value = ''
 }
 </script>
 
