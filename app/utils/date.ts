@@ -24,11 +24,10 @@ export interface CalendarCell {
 }
 
 // Build a 6-week (42 cell) grid for the given month, Monday-first.
-export function buildMonthGrid(year: number, month: number): CalendarCell[] {
+export function buildMonthGrid(year: number, month: number, today = todayISO()): CalendarCell[] {
   const first = new Date(year, month, 1)
   const startOffset = (first.getDay() + 6) % 7 // 0 = Monday
   const start = new Date(year, month, 1 - startOffset)
-  const today = todayISO()
 
   const cells: CalendarCell[] = []
   for (let i = 0; i < 42; i++) {

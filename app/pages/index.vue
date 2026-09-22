@@ -2,17 +2,20 @@
 import { api } from '~~/convex/_generated/api'
 import type { Id } from '~~/convex/_generated/dataModel'
 
+// "Today" is derived reactively so it can be re-synced on the client: SSR runs
+// in UTC, which can land on the wrong calendar day for the user's timezone.
+const today = ref(todayISO())
 const now = new Date()
 const viewYear = ref(now.getFullYear())
 const viewMonth = ref(now.getMonth()) // 0-based
-const selectedDate = ref(todayISO())
+const selectedDate = ref(today.value)
 
 const monthDate = computed(() => new Date(viewYear.value, viewMonth.value, 1))
 const monthLabel = computed(() =>
   monthDate.value.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
 )
 const monthParam = computed(() => monthKey(monthDate.value))
-const grid = computed(() => buildMonthGrid(viewYear.value, viewMonth.value))
+const grid = computed(() => buildMonthGrid(viewYear.value, viewMonth.value, today.value))
 
 const { data: workouts } = useConvexQuery(
   api.workouts.listByMonth,
@@ -39,10 +42,16 @@ function shiftMonth(delta: number) {
 }
 
 function goToday() {
-  viewYear.value = now.getFullYear()
-  viewMonth.value = now.getMonth()
-  selectedDate.value = todayISO()
+  const d = new Date()
+  today.value = toISODate(d)
+  viewYear.value = d.getFullYear()
+  viewMonth.value = d.getMonth()
+  selectedDate.value = today.value
 }
+
+// Re-sync to the browser's local date once mounted, correcting any UTC/SSR
+// drift (e.g. an evening in Mountain time rendering as tomorrow).
+onMounted(goToday)
 
 const statusColor: Record<string, 'neutral' | 'primary' | 'success'> = {
   planned: 'neutral',
