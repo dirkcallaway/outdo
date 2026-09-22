@@ -11,6 +11,74 @@ const { data: exercises, isPending } = useConvexQuery(
   () => ({ search: debounced.value || undefined, category: activeCategory.value })
 )
 
+type Exercise = NonNullable<typeof exercises.value>[number]
+
+// --- Detail sheet: tap an exercise to see its stats and add it ---
+const selected = ref<Exercise | null>(null)
+const showDetail = computed({
+  get: () => selected.value !== null,
+  set: (v: boolean) => {
+    if (!v) selected.value = null
+  }
+})
+
+// --- Add an exercise to today's workout ---
+const toast = useToast()
+const today = todayISO()
+const { data: todaysWorkouts } = useConvexQuery(
+  api.workouts.listByDate,
+  () => ({ date: today })
+)
+const createWorkout = useConvexMutation(api.workouts.create)
+const addExercise = useConvexMutation(api.workouts.addExercise)
+const adding = ref(false)
+
+// Saved reusable workouts (the "Workouts" tab) to add exercises into.
+const { data: plans } = useConvexQuery(api.templates.list, {})
+const addToTemplate = useConvexMutation(api.templates.addExercise)
+
+function addedToast(exName: string, dest: string, to: string) {
+  toast.add({
+    title: `Added ${exName}`,
+    description: `to ${dest}`,
+    color: 'success',
+    icon: 'i-lucide-check',
+    actions: [{
+      label: 'Open',
+      color: 'neutral',
+      variant: 'outline',
+      onClick: () => navigateTo(to)
+    }]
+  })
+}
+
+async function addToToday(ex: Exercise) {
+  if (adding.value) return
+  adding.value = true
+  try {
+    const list = todaysWorkouts.value ?? []
+    const target = list.find(w => w.status === 'in_progress')
+      ?? list.find(w => w.status !== 'completed')
+    const workoutId = target?._id
+      ?? await createWorkout.mutate({ date: today, status: 'planned' })
+    await addExercise.mutate({ workoutId, exerciseId: ex._id })
+    addedToast(ex.name, target ? target.name : 'today\'s workout', `/workout/${workoutId}`)
+  } finally {
+    adding.value = false
+  }
+}
+
+async function addToPlan(ex: Exercise, plan: NonNullable<typeof plans.value>[number]) {
+  if (adding.value) return
+  adding.value = true
+  try {
+    await addToTemplate.mutate({ templateId: plan._id, exerciseId: ex._id })
+    addedToast(ex.name, plan.name, `/workouts/${plan._id}`)
+  } finally {
+    adding.value = false
+  }
+}
+
 // --- Add custom exercise ---
 const showAdd = ref(false)
 const form = reactive({ name: '', category: '', equipment: '' })
@@ -94,6 +162,8 @@ async function saveCustom() {
         v-for="ex in exercises"
         :key="ex._id"
         :ui="{ body: 'p-3 sm:p-3' }"
+        class="transition-colors hover:bg-elevated/50 cursor-pointer"
+        @click="selected = ex"
       >
         <div class="flex items-center gap-3">
           <div
@@ -103,7 +173,7 @@ async function saveCustom() {
               v-if="ex.imageUrl"
               :src="ex.imageUrl"
               :alt="ex.name"
-              class="size-full object-cover"
+              class="size-full object-contain p-1"
             >
             <UIcon
               v-else
@@ -128,6 +198,15 @@ async function saveCustom() {
           >
             Custom
           </UBadge>
+          <UButton
+            icon="i-lucide-plus"
+            color="neutral"
+            variant="soft"
+            size="sm"
+            :disabled="adding"
+            aria-label="Add to today's workout"
+            @click.stop="addToToday(ex)"
+          />
         </div>
       </UCard>
     </div>
@@ -140,6 +219,66 @@ async function saveCustom() {
         class="underline"
       >wger</a> (CC-BY-SA).
     </p>
+
+    <!-- Exercise detail sheet -->
+    <UModal
+      v-model:open="showDetail"
+      :title="selected?.name ?? 'Exercise'"
+      :description="[selected?.category, selected?.equipment].filter(Boolean).join(' · ') || undefined"
+    >
+      <template #body>
+        <div
+          v-if="selected"
+          class="space-y-4"
+        >
+          <img
+            v-if="selected.imageUrl"
+            :src="selected.imageUrl"
+            :alt="selected.name"
+            class="w-full h-48 object-contain rounded-lg bg-elevated p-2"
+          >
+          <ExerciseProgress
+            :exercise-id="selected._id"
+            :name="selected.name"
+            hide-title
+          />
+
+          <div class="space-y-2 border-t border-default pt-4">
+            <p class="text-xs font-medium text-muted uppercase tracking-wide">
+              Add to
+            </p>
+            <UButton
+              label="Today's workout"
+              icon="i-lucide-calendar-plus"
+              block
+              size="lg"
+              :disabled="adding"
+              @click="addToToday(selected); showDetail = false"
+            />
+            <UButton
+              v-for="plan in plans"
+              :key="plan._id"
+              color="neutral"
+              variant="soft"
+              block
+              size="lg"
+              :disabled="adding"
+              class="justify-between"
+              @click="addToPlan(selected, plan); showDetail = false"
+            >
+              <span class="flex items-center gap-2 min-w-0">
+                <UIcon
+                  name="i-lucide-clipboard-list"
+                  class="size-4 shrink-0"
+                />
+                <span class="truncate">{{ plan.name }}</span>
+              </span>
+              <span class="text-xs text-muted shrink-0">{{ plan.exerciseCount }} exercises</span>
+            </UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
 
     <!-- Add custom modal -->
     <UModal

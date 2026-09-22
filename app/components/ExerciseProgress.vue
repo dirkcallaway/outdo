@@ -2,7 +2,7 @@
 import { api } from '~~/convex/_generated/api'
 import type { Id } from '~~/convex/_generated/dataModel'
 
-const props = defineProps<{ exerciseId: Id<'exercises'>, name: string }>()
+const props = defineProps<{ exerciseId: Id<'exercises'>, name: string, hideTitle?: boolean }>()
 
 const { data: history } = useConvexQuery(
   api.stats.exerciseHistory,
@@ -20,7 +20,10 @@ const best1RM = computed(() => (history.value ?? []).map(p => p.best1RM))
 
 <template>
   <div class="space-y-3">
-    <h3 class="font-semibold">
+    <h3
+      v-if="!hideTitle"
+      class="font-semibold"
+    >
       {{ name }}
     </h3>
 
