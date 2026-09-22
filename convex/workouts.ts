@@ -36,6 +36,46 @@ export const listByDate = query({
   }
 })
 
+// The user's most recently completed sessions, for quick access in the
+// Workouts tab. Each row carries an exercise count for the list view.
+export const recentCompleted = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const userId = await getUserId(ctx)
+    if (!userId) return []
+    const rows = await ctx.db
+      .query('workouts')
+      .withIndex('by_user_status', q => q.eq('userId', userId).eq('status', 'completed'))
+      .collect()
+    // Most recent first: date (YYYY-MM-DD) desc, tie-break on completedAt.
+    rows.sort((a, b) => b.date.localeCompare(a.date) || (b.completedAt ?? 0) - (a.completedAt ?? 0))
+    const top = rows.slice(0, args.limit ?? 3)
+    return Promise.all(top.map(async (w) => {
+      const entries = await ctx.db
+        .query('workoutEntries')
+        .withIndex('by_workout', q => q.eq('workoutId', w._id))
+        .collect()
+      // Compact per-exercise summary for sharing (skip exercises with no real sets).
+      const summary = []
+      for (const entry of entries) {
+        const sets = await ctx.db
+          .query('sets')
+          .withIndex('by_entry', q => q.eq('entryId', entry._id))
+          .collect()
+        const real = sets.filter(s => s.completed || s.reps > 0)
+        if (!real.length) continue
+        summary.push({
+          name: entry.exerciseName,
+          count: real.length,
+          top: Math.max(0, ...real.map(s => s.weight || 0)),
+          unit: real[0]!.unit
+        })
+      }
+      return { _id: w._id, name: w.name, date: w.date, exerciseCount: entries.length, summary }
+    }))
+  }
+})
+
 // Full workout with its ordered entries and their sets.
 export const getWithEntries = query({
   args: { id: v.id('workouts') },

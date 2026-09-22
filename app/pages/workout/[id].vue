@@ -2,6 +2,7 @@
 import { useIDBKeyval } from '@vueuse/integrations/useIDBKeyval'
 import { api } from '~~/convex/_generated/api'
 import type { Id } from '~~/convex/_generated/dataModel'
+import type { ExerciseSummary } from '~/utils/share'
 
 interface LocalSet {
   setNumber: number
@@ -231,6 +232,29 @@ async function deleteWorkout() {
   await navigateTo('/')
 }
 
+// --- Share ---
+const toast = useToast()
+
+async function shareWorkout() {
+  const w = workout.value
+  if (!w) return
+  const summary: ExerciseSummary[] = []
+  for (const entry of w.entries) {
+    const sets = entry.sets.filter(s => s.completed || s.reps > 0)
+    if (!sets.length) continue
+    summary.push({
+      name: entry.exerciseName,
+      count: sets.length,
+      top: Math.max(0, ...sets.map(s => Number(s.weight) || 0)),
+      unit: sets[0]?.unit ?? 'kg'
+    })
+  }
+  const result = await shareOrCopyText(w.name, buildShareText(w.name, w.date, summary))
+  if (result === 'copied') {
+    toast.add({ title: 'Workout copied to clipboard', color: 'success', icon: 'i-lucide-check' })
+  }
+}
+
 const menuItems = computed(() => [[
   { label: 'Rename', icon: 'i-lucide-pencil', onSelect: openRename },
   { label: 'Delete', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: deleteWorkout }
@@ -332,14 +356,27 @@ function entryMenu(entry: { _id: Id<'workoutEntries'> }, index: number) {
           @click="finish"
         />
       </div>
-      <UBadge
+      <div
         v-else
-        color="success"
-        variant="soft"
-        class="w-full justify-center py-1.5"
+        class="flex items-center gap-2"
       >
-        Completed
-      </UBadge>
+        <UBadge
+          color="success"
+          variant="soft"
+          class="flex-1 justify-center py-1.5"
+        >
+          Completed
+        </UBadge>
+        <UButton
+          label="Share"
+          icon="i-lucide-share"
+          color="neutral"
+          variant="soft"
+          size="sm"
+          class="shrink-0"
+          @click="shareWorkout"
+        />
+      </div>
 
       <!-- offline / sync indicators -->
       <div
