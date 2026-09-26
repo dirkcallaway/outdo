@@ -6,6 +6,7 @@ export interface ExerciseSummary {
   count: number // number of sets that count (logged / completed)
   top: number // heaviest weight across those sets (0 = bodyweight)
   unit: string
+  topReps?: number // best reps in a set, for body-weight exercises
 }
 
 // The compact plain-text summary we hand to the share sheet:
@@ -19,7 +20,9 @@ export function buildShareText(name: string, dateISO: string, summary: ExerciseS
   const lines: string[] = [`${name} — ${formatDisplayDate(dateISO)}`, '']
   for (const e of summary) {
     const n = `${e.count} set${e.count === 1 ? '' : 's'}`
-    lines.push(e.top > 0 ? `${e.name}: ${n}, top ${e.top}${e.unit}` : `${e.name}: ${n}`)
+    if (e.top > 0) lines.push(`${e.name}: ${n}, top ${e.top}${e.unit}`)
+    else if (e.topReps) lines.push(`${e.name}: ${n}, top ${e.topReps} reps`)
+    else lines.push(`${e.name}: ${n}`)
   }
   lines.push('', 'Tracked with OutDo')
   return lines.join('\n')

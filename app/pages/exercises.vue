@@ -81,9 +81,10 @@ async function addToPlan(ex: Exercise, plan: NonNullable<typeof plans.value>[num
 
 // --- Add custom exercise ---
 const showAdd = ref(false)
-const form = reactive({ name: '', category: '', equipment: '' })
+const form = reactive({ name: '', category: '', equipment: '', bodyweight: false })
 const saving = ref(false)
 const createCustom = useConvexMutation(api.exercises.createCustom)
+const setBodyweight = useConvexMutation(api.exercises.setBodyweight)
 
 async function saveCustom() {
   if (!form.name.trim()) return
@@ -92,15 +93,24 @@ async function saveCustom() {
     await createCustom.mutate({
       name: form.name,
       category: form.category || undefined,
-      equipment: form.equipment || undefined
+      equipment: form.equipment || undefined,
+      bodyweight: form.bodyweight || undefined
     })
     showAdd.value = false
     form.name = ''
     form.category = ''
     form.equipment = ''
+    form.bodyweight = false
   } finally {
     saving.value = false
   }
+}
+
+// Toggle body-weight on a custom exercise from the detail sheet.
+async function toggleBodyweight(value: boolean) {
+  if (!selected.value) return
+  await setBodyweight.mutate({ id: selected.value._id, bodyweight: value })
+  selected.value = { ...selected.value, bodyweight: value }
 }
 </script>
 
@@ -191,6 +201,14 @@ async function saveCustom() {
             </p>
           </div>
           <UBadge
+            v-if="ex.bodyweight"
+            color="neutral"
+            variant="soft"
+            size="sm"
+          >
+            Body weight
+          </UBadge>
+          <UBadge
             v-if="ex.source === 'custom'"
             color="neutral"
             variant="soft"
@@ -237,6 +255,33 @@ async function saveCustom() {
             :alt="selected.name"
             class="w-full h-48 object-contain rounded-lg bg-elevated p-2"
           >
+          <!-- Body-weight: editable for custom exercises, read-only badge otherwise -->
+          <div
+            v-if="selected.source === 'custom'"
+            class="flex items-center justify-between rounded-lg border border-default p-3"
+          >
+            <div class="min-w-0">
+              <p class="text-sm font-medium">
+                Body weight
+              </p>
+              <p class="text-xs text-muted">
+                Track by reps only, no weight
+              </p>
+            </div>
+            <USwitch
+              :model-value="selected.bodyweight ?? false"
+              @update:model-value="toggleBodyweight"
+            />
+          </div>
+          <UBadge
+            v-else-if="selected.bodyweight"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-user"
+          >
+            Body weight
+          </UBadge>
+
           <ExerciseProgress
             :exercise-id="selected._id"
             :name="selected.name"
@@ -312,6 +357,17 @@ async function saveCustom() {
               class="w-full"
             />
           </UFormField>
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium">
+                Body weight
+              </p>
+              <p class="text-xs text-muted">
+                Track by reps only, no weight
+              </p>
+            </div>
+            <USwitch v-model="form.bodyweight" />
+          </div>
           <div class="flex justify-end gap-2">
             <UButton
               label="Cancel"

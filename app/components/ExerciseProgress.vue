@@ -13,9 +13,11 @@ const { data: prs } = useConvexQuery(
   () => ({ exerciseId: props.exerciseId })
 )
 
+const bodyweight = computed(() => prs.value?.bodyweight ?? false)
 const labels = computed(() => (history.value ?? []).map(p => formatDisplayDate(p.date)))
 const topWeight = computed(() => (history.value ?? []).map(p => p.topWeight))
 const best1RM = computed(() => (history.value ?? []).map(p => p.best1RM))
+const topReps = computed(() => (history.value ?? []).map(p => p.topReps))
 </script>
 
 <template>
@@ -27,8 +29,40 @@ const best1RM = computed(() => (history.value ?? []).map(p => p.best1RM))
       {{ name }}
     </h3>
 
+    <!-- Body-weight: rep-based records -->
     <div
-      v-if="prs"
+      v-if="prs && bodyweight"
+      class="grid grid-cols-3 gap-2"
+    >
+      <UCard :ui="{ body: 'p-3 sm:p-3' }">
+        <p class="text-lg font-bold leading-none">
+          {{ prs.maxReps }}
+        </p>
+        <p class="text-xs text-muted mt-1">
+          Max reps
+        </p>
+      </UCard>
+      <UCard :ui="{ body: 'p-3 sm:p-3' }">
+        <p class="text-lg font-bold leading-none">
+          {{ prs.totalReps }}
+        </p>
+        <p class="text-xs text-muted mt-1">
+          Total reps
+        </p>
+      </UCard>
+      <UCard :ui="{ body: 'p-3 sm:p-3' }">
+        <p class="text-lg font-bold leading-none">
+          {{ prs.totalSets }}
+        </p>
+        <p class="text-xs text-muted mt-1">
+          Sets
+        </p>
+      </UCard>
+    </div>
+
+    <!-- Weighted: load-based records -->
+    <div
+      v-else-if="prs"
       class="grid grid-cols-3 gap-2"
     >
       <UCard :ui="{ body: 'p-3 sm:p-3' }">
@@ -63,6 +97,12 @@ const best1RM = computed(() => (history.value ?? []).map(p => p.best1RM))
     >
       <ClientOnly>
         <ProgressChart
+          v-if="bodyweight"
+          :labels="labels"
+          :reps="topReps"
+        />
+        <ProgressChart
+          v-else
           :labels="labels"
           :top-weight="topWeight"
           :best1-r-m="best1RM"

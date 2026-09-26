@@ -62,7 +62,8 @@ function pick(id: Id<'exercises'>, name: string) {
                 {{ ex.name }}
               </p>
               <p class="text-xs text-muted truncate">
-                {{ ex.category }}<span v-if="ex.equipment"> · {{ ex.equipment }}</span>
+                <span v-if="ex.bodyweight">Body weight</span>
+                <span v-else>{{ ex.category }}<span v-if="ex.equipment"> · {{ ex.equipment }}</span></span>
               </p>
             </div>
             <UIcon

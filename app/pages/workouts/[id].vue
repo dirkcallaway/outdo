@@ -151,8 +151,17 @@ async function startNow() {
           />
         </div>
         <div class="min-w-0 flex-1">
-          <p class="font-medium truncate">
-            {{ entry.exerciseName }}
+          <p class="font-medium truncate flex items-center gap-1.5">
+            <span class="truncate">{{ entry.exerciseName }}</span>
+            <UBadge
+              v-if="entry.bodyweight"
+              color="neutral"
+              variant="soft"
+              size="sm"
+              class="shrink-0"
+            >
+              Body weight
+            </UBadge>
           </p>
           <div class="flex items-center gap-2 mt-2">
             <UInputNumber
