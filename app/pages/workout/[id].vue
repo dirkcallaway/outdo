@@ -20,6 +20,37 @@ const { data: workout } = useConvexQuery(
   () => ({ id: workoutId.value })
 )
 
+// Sets logged the last time each exercise was performed (excluding this
+// session), for the "Last · ..." reference line. Reactive: updates as sets sync.
+const { data: previous } = useConvexQuery(
+  api.workouts.previousPerformance,
+  () => ({ id: workoutId.value })
+)
+
+type PrevRecord = { date: string, unit: 'kg' | 'lb', sets: { setNumber: number, weight: number, reps: number }[] }
+
+function prevFor(exerciseId: string): PrevRecord | undefined {
+  return previous.value?.[exerciseId]
+}
+
+function formatPrev(rec: PrevRecord, bodyweight?: boolean): string {
+  if (bodyweight) return rec.sets.map(s => s.reps).join(', ')
+  return rec.sets.map(s => `${s.weight}×${s.reps}`).join(', ')
+}
+
+// Fill an entry's set rows from its previous session (opt-in). Rows start
+// incomplete so nothing is logged until the user confirms each set.
+function useLast(entryId: string, rec: PrevRecord) {
+  const next: LocalSet[] = rec.sets.map((s, i) => ({
+    setNumber: i + 1,
+    weight: s.weight,
+    reps: s.reps,
+    unit: unit.value,
+    completed: false
+  }))
+  if (store.value) commit({ ...store.value, [entryId]: next })
+}
+
 const { logSet, pendingCount, online } = useOutbox()
 
 const addExercise = useConvexMutation(api.workouts.addExercise)
@@ -182,8 +213,12 @@ function expand(entryId: string) {
 function collapse(entryId: string) {
   manualExpand.value = { ...manualExpand.value, [entryId]: false }
 }
-function doneSummary(entryId: string): string {
+function doneSummary(entryId: string, bodyweight?: boolean): string {
   const sets = setsFor(entryId)
+  if (bodyweight) {
+    const topReps = Math.max(0, ...sets.map(s => Number(s.reps) || 0))
+    return topReps > 0 ? `${sets.length} sets · ${topReps} reps` : `${sets.length} sets`
+  }
   const top = Math.max(0, ...sets.map(s => Number(s.weight) || 0))
   const u = sets[0]?.unit ?? 'kg'
   return top > 0 ? `${sets.length} sets · ${top}${u}` : `${sets.length} sets`
@@ -245,8 +280,9 @@ async function shareWorkout() {
     summary.push({
       name: entry.exerciseName,
       count: sets.length,
-      top: Math.max(0, ...sets.map(s => Number(s.weight) || 0)),
-      unit: sets[0]?.unit ?? 'kg'
+      top: entry.bodyweight ? 0 : Math.max(0, ...sets.map(s => Number(s.weight) || 0)),
+      unit: sets[0]?.unit ?? 'kg',
+      topReps: entry.bodyweight ? Math.max(0, ...sets.map(s => Number(s.reps) || 0)) : undefined
     })
   }
   const result = await shareOrCopyText(w.name, buildShareText(w.name, w.date, summary))
@@ -423,7 +459,7 @@ function entryMenu(entry: { _id: Id<'workoutEntries'> }, index: number) {
             class="text-success size-5 shrink-0"
           />
           <span class="font-semibold truncate flex-1">{{ entry.exerciseName }}</span>
-          <span class="text-xs text-muted whitespace-nowrap">{{ doneSummary(entry._id) }}</span>
+          <span class="text-xs text-muted whitespace-nowrap">{{ doneSummary(entry._id, entry.bodyweight) }}</span>
           <UIcon
             name="i-lucide-chevron-down"
             class="text-muted size-4 shrink-0"
@@ -433,8 +469,17 @@ function entryMenu(entry: { _id: Id<'workoutEntries'> }, index: number) {
         <!-- Expanded -->
         <template v-else>
           <div class="flex items-center justify-between mb-2 gap-1">
-            <h3 class="font-semibold truncate flex-1">
-              {{ entry.exerciseName }}
+            <h3 class="font-semibold truncate flex-1 flex items-center gap-1.5">
+              <span class="truncate">{{ entry.exerciseName }}</span>
+              <UBadge
+                v-if="entry.bodyweight"
+                color="neutral"
+                variant="soft"
+                size="sm"
+                class="shrink-0"
+              >
+                Body weight
+              </UBadge>
             </h3>
             <UDropdownMenu :items="entryMenu(entry, ei)">
               <UButton
@@ -446,11 +491,35 @@ function entryMenu(entry: { _id: Id<'workoutEntries'> }, index: number) {
             </UDropdownMenu>
           </div>
 
+          <!-- Last session reference (only when this exercise was done before) -->
+          <div
+            v-if="prevFor(entry.exerciseId)"
+            class="flex items-center gap-1.5 mb-2 text-xs text-muted"
+          >
+            <span class="min-w-0 truncate">
+              Last · {{ formatDisplayDate(prevFor(entry.exerciseId)!.date) }} ·
+              {{ formatPrev(prevFor(entry.exerciseId)!, entry.bodyweight) }}
+              {{ entry.bodyweight ? 'reps' : prevFor(entry.exerciseId)!.unit }}
+            </span>
+            <UButton
+              label="Use last"
+              icon="i-lucide-rotate-ccw"
+              color="neutral"
+              variant="link"
+              size="xs"
+              class="shrink-0 -my-1"
+              @click="useLast(entry._id, prevFor(entry.exerciseId)!)"
+            />
+          </div>
+
           <!-- Set rows -->
           <div class="space-y-1.5">
-            <div class="grid grid-cols-[1.5rem_1fr_1fr_2.5rem_2rem] gap-2 items-center text-xs text-muted px-1">
+            <div
+              class="grid gap-2 items-center text-xs text-muted px-1"
+              :class="entry.bodyweight ? 'grid-cols-[1.5rem_1fr_2.5rem_2rem]' : 'grid-cols-[1.5rem_1fr_1fr_2.5rem_2rem]'"
+            >
               <span>#</span>
-              <span>Weight</span>
+              <span v-if="!entry.bodyweight">Weight</span>
               <span>Reps</span>
               <span />
               <span />
@@ -458,11 +527,15 @@ function entryMenu(entry: { _id: Id<'workoutEntries'> }, index: number) {
             <div
               v-for="(s, i) in setsFor(entry._id)"
               :key="i"
-              class="grid grid-cols-[1.5rem_1fr_1fr_2.5rem_2rem] gap-2 items-center"
-              :class="s.completed ? 'opacity-70' : ''"
+              class="grid gap-2 items-center"
+              :class="[
+                entry.bodyweight ? 'grid-cols-[1.5rem_1fr_2.5rem_2rem]' : 'grid-cols-[1.5rem_1fr_1fr_2.5rem_2rem]',
+                s.completed ? 'opacity-70' : ''
+              ]"
             >
               <span class="text-sm text-muted text-center">{{ s.setNumber }}</span>
               <UInput
+                v-if="!entry.bodyweight"
                 v-model.number="s.weight"
                 type="number"
                 inputmode="decimal"

@@ -99,7 +99,8 @@ export const addExercise = mutation({
       exerciseName: ex.name,
       order: existing.length,
       targetSets: 3,
-      targetReps: 10
+      targetReps: 10,
+      bodyweight: ex.bodyweight
     })
   }
 })

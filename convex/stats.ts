@@ -49,6 +49,8 @@ export const exerciseHistory = query({
   handler: async (ctx, args) => {
     const userId = await getUserId(ctx)
     if (!userId) return []
+    const exercise = await ctx.db.get(args.exerciseId)
+    const bodyweight = exercise?.bodyweight ?? false
     const sets = await ctx.db
       .query('sets')
       .withIndex('by_user_exercise', q =>
@@ -74,10 +76,13 @@ export const exerciseHistory = query({
           workoutId,
           date: workout?.date ?? '',
           unit: group[0]?.unit ?? 'kg',
+          bodyweight,
           sets: group.length,
           topWeight,
           best1RM,
-          totalVolume
+          totalVolume,
+          topReps: Math.max(...group.map(s => s.reps)),
+          totalReps: group.reduce((sum, s) => sum + s.reps, 0)
         }
       })
     )
@@ -93,6 +98,7 @@ export const personalRecords = query({
   handler: async (ctx, args) => {
     const userId = await getUserId(ctx)
     if (!userId) return null
+    const exercise = await ctx.db.get(args.exerciseId)
     const sets = await ctx.db
       .query('sets')
       .withIndex('by_user_exercise', q =>
@@ -102,9 +108,11 @@ export const personalRecords = query({
     if (sets.length === 0) return null
 
     return {
+      bodyweight: exercise?.bodyweight ?? false,
       maxWeight: Math.max(...sets.map(s => s.weight)),
       maxReps: Math.max(...sets.map(s => s.reps)),
       best1RM: Math.max(...sets.map(s => estimate1RM(s.weight, s.reps))),
+      totalReps: sets.reduce((sum, s) => sum + s.reps, 0),
       unit: sets[0]!.unit,
       totalSets: sets.length
     }

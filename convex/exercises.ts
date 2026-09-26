@@ -62,7 +62,8 @@ export const createCustom = mutation({
   args: {
     name: v.string(),
     category: v.optional(v.string()),
-    equipment: v.optional(v.string())
+    equipment: v.optional(v.string()),
+    bodyweight: v.optional(v.boolean())
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx)
@@ -70,9 +71,22 @@ export const createCustom = mutation({
       name: args.name.trim(),
       category: args.category,
       equipment: args.equipment,
+      bodyweight: args.bodyweight,
       source: 'custom',
       createdBy: userId
     })
+  }
+})
+
+// Toggle the body-weight flag on a user's own custom exercise. wger rows are
+// global/shared, so only the creator can flip their own exercises.
+export const setBodyweight = mutation({
+  args: { id: v.id('exercises'), bodyweight: v.boolean() },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx)
+    const ex = await ctx.db.get(args.id)
+    if (!ex || ex.createdBy !== userId) throw new Error('Not found')
+    await ctx.db.patch(args.id, { bodyweight: args.bodyweight })
   }
 })
 
@@ -92,6 +106,9 @@ export const upsertFromWger = internalMutation({
       .withIndex('by_wgerId', q => q.eq('wgerId', args.wgerId))
       .unique()
 
+    // wger's equipment 7 is "none (bodyweight exercise)"; classify accordingly.
+    const bodyweight = /body\s?weight|bodyweight|none/i.test(args.equipment ?? '')
+
     const doc = {
       name: args.name,
       category: args.category,
@@ -99,7 +116,8 @@ export const upsertFromWger = internalMutation({
       muscles: args.muscles,
       imageUrl: args.imageUrl,
       source: 'wger' as const,
-      wgerId: args.wgerId
+      wgerId: args.wgerId,
+      bodyweight
     }
 
     if (existing) {

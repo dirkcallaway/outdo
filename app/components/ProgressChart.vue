@@ -15,31 +15,45 @@ ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip,
 
 const props = defineProps<{
   labels: string[]
-  topWeight: number[]
-  best1RM: number[]
+  topWeight?: number[]
+  best1RM?: number[]
+  // Body-weight exercises chart reps instead of weight.
+  reps?: number[]
 }>()
 
 const data = computed(() => ({
   labels: props.labels,
-  datasets: [
-    {
-      label: 'Top weight',
-      data: props.topWeight,
-      borderColor: '#00C16A',
-      backgroundColor: 'rgba(0,193,106,0.15)',
-      tension: 0.3,
-      fill: true,
-      pointRadius: 3
-    },
-    {
-      label: 'Est. 1RM',
-      data: props.best1RM,
-      borderColor: '#94a3b8',
-      borderDash: [4, 4],
-      tension: 0.3,
-      pointRadius: 0
-    }
-  ]
+  datasets: props.reps
+    ? [
+        {
+          label: 'Top reps',
+          data: props.reps,
+          borderColor: '#00C16A',
+          backgroundColor: 'rgba(0,193,106,0.15)',
+          tension: 0.3,
+          fill: true,
+          pointRadius: 3
+        }
+      ]
+    : [
+        {
+          label: 'Top weight',
+          data: props.topWeight ?? [],
+          borderColor: '#00C16A',
+          backgroundColor: 'rgba(0,193,106,0.15)',
+          tension: 0.3,
+          fill: true,
+          pointRadius: 3
+        },
+        {
+          label: 'Est. 1RM',
+          data: props.best1RM ?? [],
+          borderColor: '#94a3b8',
+          borderDash: [4, 4],
+          tension: 0.3,
+          pointRadius: 0
+        }
+      ]
 }))
 
 const options = {

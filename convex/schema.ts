@@ -14,7 +14,9 @@ export default defineSchema({
     imageUrl: v.optional(v.string()),
     source: v.union(v.literal('wger'), v.literal('custom')),
     wgerId: v.optional(v.number()),
-    createdBy: v.optional(v.string())
+    createdBy: v.optional(v.string()),
+    // Body-weight exercise (push-ups, pull-ups, …): logged by reps only, no weight.
+    bodyweight: v.optional(v.boolean())
   })
     .index('by_wgerId', ['wgerId'])
     .index('by_creator', ['createdBy'])
@@ -51,7 +53,8 @@ export default defineSchema({
     exerciseName: v.string(), // denormalized for fast rendering
     order: v.number(),
     targetSets: v.optional(v.number()),
-    targetReps: v.optional(v.number())
+    targetReps: v.optional(v.number()),
+    bodyweight: v.optional(v.boolean()) // denormalized from the exercise at add time
   }).index('by_workout', ['workoutId']),
 
   // A single logged set. exerciseId/userId denormalized so stats queries are cheap.
@@ -87,6 +90,7 @@ export default defineSchema({
     exerciseName: v.string(),
     order: v.number(),
     targetSets: v.optional(v.number()),
-    targetReps: v.optional(v.number())
+    targetReps: v.optional(v.number()),
+    bodyweight: v.optional(v.boolean()) // denormalized from the exercise at add time
   }).index('by_template', ['templateId'])
 })

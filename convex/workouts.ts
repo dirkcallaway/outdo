@@ -67,8 +67,9 @@ export const recentCompleted = query({
         summary.push({
           name: entry.exerciseName,
           count: real.length,
-          top: Math.max(0, ...real.map(s => s.weight || 0)),
-          unit: real[0]!.unit
+          top: entry.bodyweight ? 0 : Math.max(0, ...real.map(s => s.weight || 0)),
+          unit: real[0]!.unit,
+          topReps: entry.bodyweight ? Math.max(0, ...real.map(s => s.reps || 0)) : undefined
         })
       }
       return { _id: w._id, name: w.name, date: w.date, exerciseCount: entries.length, summary }
@@ -102,6 +103,79 @@ export const getWithEntries = query({
       })
     )
     return { ...workout, entries: withSets }
+  }
+})
+
+// For every exercise in this workout, the sets logged in the most recent
+// *earlier* session that used that exercise. Powers the "Last · ..." reference
+// line in the tracker. Keyed by exerciseId; exercises with no prior session are
+// simply absent from the map.
+export const previousPerformance = query({
+  args: { id: v.id('workouts') },
+  handler: async (ctx, args) => {
+    const userId = await getUserId(ctx)
+    if (!userId) return {}
+    const workout = await ctx.db.get(args.id)
+    if (!workout || workout.userId !== userId) return {}
+
+    const entries = await ctx.db
+      .query('workoutEntries')
+      .withIndex('by_workout', q => q.eq('workoutId', args.id))
+      .collect()
+    const exerciseIds = [...new Set(entries.map(e => e.exerciseId))]
+
+    const result: Record<
+      string,
+      { date: string, unit: 'kg' | 'lb', sets: { setNumber: number, weight: number, reps: number }[] }
+    > = {}
+
+    await Promise.all(
+      exerciseIds.map(async (exerciseId) => {
+        const sets = await ctx.db
+          .query('sets')
+          .withIndex('by_user_exercise', q =>
+            q.eq('userId', userId).eq('exerciseId', exerciseId)
+          )
+          .collect()
+
+        // Group the exercise's sets by the session they belong to, skipping the
+        // current workout and any group without real (logged) sets.
+        const byWorkout = new Map<string, typeof sets>()
+        for (const s of sets) {
+          if (s.workoutId === args.id) continue
+          const list = byWorkout.get(s.workoutId) ?? []
+          list.push(s)
+          byWorkout.set(s.workoutId, list)
+        }
+
+        let best: { date: string, completedAt: number, sets: typeof sets } | null = null
+        for (const [workoutId, group] of byWorkout) {
+          const real = group.filter(s => s.completed || s.reps > 0)
+          if (!real.length) continue
+          const w = await ctx.db.get(workoutId as typeof args.id)
+          if (!w || !w.date) continue
+          const cand = { date: w.date, completedAt: w.completedAt ?? 0, sets: real }
+          if (
+            !best
+            || cand.date > best.date
+            || (cand.date === best.date && cand.completedAt > best.completedAt)
+          ) {
+            best = cand
+          }
+        }
+
+        if (best) {
+          const ordered = [...best.sets].sort((a, b) => a.setNumber - b.setNumber)
+          result[exerciseId] = {
+            date: best.date,
+            unit: ordered[0]!.unit,
+            sets: ordered.map(s => ({ setNumber: s.setNumber, weight: s.weight, reps: s.reps }))
+          }
+        }
+      })
+    )
+
+    return result
   }
 })
 
@@ -150,7 +224,8 @@ export const create = mutation({
           exerciseName: pe.exerciseName,
           order: pe.order,
           targetSets: pe.targetSets,
-          targetReps: pe.targetReps
+          targetReps: pe.targetReps,
+          bodyweight: pe.bodyweight
         })
       }
     }
@@ -176,7 +251,8 @@ export const addExercise = mutation({
       userId,
       exerciseId: args.exerciseId,
       exerciseName: ex.name,
-      order: existing.length
+      order: existing.length,
+      bodyweight: ex.bodyweight
     })
   }
 })
